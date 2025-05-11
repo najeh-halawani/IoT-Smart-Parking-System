@@ -17,3 +17,7 @@ Current public parking systems are inefficient, causing traffic and wasted time.
 ### Presentation
 [1st Delivery Presentation](https://docs.google.com/presentation/d/1VHvnea2nDiLjKaK5B2iErumbn9hpuVL7MPw8SApzhms/edit?usp=sharing)
 [1st Delivery Document Report](https://docs.google.com/document/d/10ruJmEqlc8Oc96KXyhO19T9GCGOf3zeflkNzlUUKl-4/edit?usp=sharing)
+
+
+
+https://learn.adafruit.com/adafruit-vl53l1x/arduino
