@@ -20,7 +20,7 @@ struct SensorData {
 float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
   // Check if the sensor index is valid
   if (sensorIdx >= NUM_SENSORS) {
-    logError("Invalid sensor index"); // Log an error if the index is invalid
+    DEBUG(ERROR,"Invalid sensor index"); // Log an error if the index is invalid
     return -1; // Return -1 to indicate an error
   }
 
