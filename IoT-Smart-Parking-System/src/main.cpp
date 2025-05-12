@@ -42,7 +42,8 @@ PubSubClient client(espClient);
 
 void setup() {
     // Initialize serial communication
-    Serial.begin(115200);
+    Serial.begin(115200);               delay(300);
+    displaySystemInfo();              
     // Initialize I2C communication
     Wire.begin(I2C_SDA, I2C_SCL);       delay(100);
     // Initialize VL53L0X sensors

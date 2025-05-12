@@ -1,6 +1,4 @@
 #include <heltec.h>
-
-#include <PubSubClient.h>
 #include <AESLib.h>
 #include <NTPClient.h>
 #include <WiFiUdp.h>
@@ -12,7 +10,6 @@
 #include <esp_task_wdt.h>
 #include <time.h>  
 
-#define CONFIG_VERSION 1
 #define NUM_SENSORS 1
 #define THRESHOLD_DISTANCE 50
 #define HYSTERESIS 5
@@ -25,10 +22,6 @@
 
 const int trigPins[NUM_SENSORS] = { 19 };
 const int echoPins[NUM_SENSORS] = { 20 };
-
-uint8_t aes_key[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-                        0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F };
-uint8_t aes_iv[16];
 
 const char* nodeId = "NODE_001";
 Preferences preferences;
@@ -131,30 +124,6 @@ void generateRandomIV() {
   }
   preferences.putBytes("aes_iv", aes_iv, 16);
   DEBUG_PRINT("CRYPTO", "New IV saved to preferences");
-}
-
-void connectMQTT() {
-  espClient.setInsecure();
-  client.setServer(mqttServer, mqttPort);
-  DEBUG_MQTT("Connecting to MQTT server: %s:%d", mqttServer, mqttPort);
-
-  String clientId = String(mqttClientId) + "-" + String(random(0xffff), HEX);
-  DEBUG_MQTT("Using client ID: %s", clientId.c_str());
-
-  int attempts = 0;
-  while (!client.connected() && attempts < 5) {
-    if (client.connect(clientId.c_str())) {
-      DEBUG_MQTT("Connected successfully");
-    } else {
-      DEBUG_MQTT("Connection failed, state: %d", client.state());
-      delay(1000);
-      attempts++;
-    }
-  }
-
-  if (!client.connected()) {
-    logError("MQTT connection failed after multiple attempts");
-  }
 }
 
 void padInput(const char* input, uint8_t* padded, size_t input_len) {
@@ -461,13 +430,6 @@ bool isTimeInRange(int currentHour, int currentMinute) {
 }
 
 void setup() {
-  Serial.begin(115200);
-  delay(300); // Short delay for serial to initialize
-  Serial.println("\n\n=== Smart Parking System Debug Mode ===");
-  Serial.printf("Version: %d, Build: %s %s\n", CONFIG_VERSION, __DATE__, __TIME__);
-  Serial.printf("ESP32 Chip ID: %06X, CPU Freq: %d MHz\n", 
-                ESP.getEfuseMac() & 0xFFFFFF, ESP.getCpuFreqMHz());
-  Serial.printf("Free heap: %u bytes\n", ESP.getFreeHeap());
 
   esp_task_wdt_init(WDT_TIMEOUT_S, true);
   
