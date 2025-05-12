@@ -1,13 +1,18 @@
 #pragma once
-#include <stdint.h>
-#include <Arduino.h>
 
 /* System Configuration File */
 
-// ------ --Debug macros for more consistent output
-#define DEBUG_PRINT(tag, format, ...) Serial.printf("[%s] " format "\n", tag, ##__VA_ARGS__)
-#define DEBUG_ERROR(format, ...) DEBUG_PRINT("ERROR", format, ##__VA_ARGS__)
-#define DEBUG_SENSOR(format, ...) DEBUG_PRINT("SENSOR", format, ##__VA_ARGS__)
+// ------ WiFi Configuration ------------------------------
+#define WIFI_SSID "FRITZ!Box 7530 LP"
+#define WIFI_PASSWORD "70403295595551907386"
+// --------------------------------------------------------
+
+// ------ MQTT Configuration ------------------------------
+#define MQTT_SERVER "192.168.178.50"
+#define MQTT_PORT 1883
+#define MQTT_TOPIC ".../..."
+#define MQTT_CLIENT_ID "..."
+// --------------------------------------------------------
 
 // ------ I2C Configuration --------------------------------
 #define I2C_SDA 41

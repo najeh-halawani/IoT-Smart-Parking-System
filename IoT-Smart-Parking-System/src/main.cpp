@@ -13,8 +13,10 @@
 */
 
 /* Include necessary libraries */
+#include <Arduino.h>
 
 /* Include header files */
+#include "debug.h"
 #include "config.h"
 #include "utils.h"
 #include "wifi_comms.h"
@@ -28,6 +30,15 @@
 // ------ VL53L0X sensor instances -------
 Adafruit_VL53L0X lox[NUM_VL53L0X_SENSORS];
 VL53L0X_RangingMeasurementData_t measures[NUM_VL53L0X_SENSORS];
+
+// ------ WiFi variables -----------------
+unsigned long lastSuccessfulConnection = 0;
+unsigned long connectionAttempts = 0;
+WiFiClientSecure espClient;
+
+// ------ MQTT variables -----------------
+PubSubClient client(espClient);
+
 
 void setup() {
     // Initialize serial communication

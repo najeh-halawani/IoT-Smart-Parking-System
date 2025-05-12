@@ -1,6 +1,5 @@
 #include <heltec.h>
-#include <WiFi.h>
-#include <WiFiClientSecure.h>
+
 #include <PubSubClient.h>
 #include <AESLib.h>
 #include <NTPClient.h>
@@ -12,16 +11,6 @@
 #include <Preferences.h>
 #include <esp_task_wdt.h>
 #include <time.h>  
-
-// Debug macros for more consistent output
-#define DEBUG_PRINT(tag, format, ...) Serial.printf("[%s] " format "\n", tag, ##__VA_ARGS__)
-#define DEBUG_SENSOR(format, ...) DEBUG_PRINT("SENSOR", format, ##__VA_ARGS__)
-#define DEBUG_WIFI(format, ...) DEBUG_PRINT("WIFI", format, ##__VA_ARGS__)
-#define DEBUG_MQTT(format, ...) DEBUG_PRINT("MQTT", format, ##__VA_ARGS__)
-#define DEBUG_PROCESS(format, ...) DEBUG_PRINT("PROCESS", format, ##__VA_ARGS__)
-#define DEBUG_SLEEP(format, ...) DEBUG_PRINT("SLEEP", format, ##__VA_ARGS__)
-#define DEBUG_ERROR(format, ...) DEBUG_PRINT("ERROR", format, ##__VA_ARGS__)
-#define DEBUG_MEMORY(format, ...) DEBUG_PRINT("MEMORY", format, ##__VA_ARGS__)
 
 #define CONFIG_VERSION 1
 #define NUM_SENSORS 1
@@ -37,13 +26,6 @@
 const int trigPins[NUM_SENSORS] = { 19 };
 const int echoPins[NUM_SENSORS] = { 20 };
 
-const char* ssid = "whitex";
-const char* password = "whitewhite";
-const char* mqttServer = "test.mosquitto.org";
-const int mqttPort = 8883;
-const char* mqttTopic = "parking/status";
-const char* mqttClientId = "ESP32_Parking_Sensor";
-
 uint8_t aes_key[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
                         0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F };
 uint8_t aes_iv[16];
@@ -54,9 +36,6 @@ Preferences preferences;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000);
 
-
-WiFiClientSecure espClient;
-PubSubClient client(espClient);
 
 bool lastState[NUM_SENSORS] = { false };
 float lastDistance[NUM_SENSORS] = { 0 };
@@ -73,7 +52,6 @@ struct SensorData {
   unsigned long timestamp;
 };
 
-void connectWiFi();
 void connectMQTT();
 bool isTimeInRange(int currentHour, int currentMinute);
 void generateRandomIV();
@@ -81,6 +59,7 @@ void syncInternalRTC();
 
 void logError(const char* message) {
   DEBUG_ERROR("%s", message);
+  DEBUG(ERROR)
 }
 
 float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
@@ -144,30 +123,6 @@ float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
   return median;
 }
 
-void connectWiFi() {
-  DEBUG_WIFI("Connecting to WiFi SSID: %s", ssid);
-
-  WiFi.begin(ssid, password);
-
-  int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
-    delay(500);
-    Serial.print(".");
-    attempts++;
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
-    DEBUG_WIFI("Connected with IP: %s (RSSI: %d dBm)", 
-               WiFi.localIP().toString().c_str(), WiFi.RSSI());
-    lastSuccessfulConnection = millis();
-    connectionAttempts = 0;
-  } else {
-    DEBUG_WIFI("Connection failed after %d attempts. Status: %d", 
-               attempts, WiFi.status());
-    connectionAttempts++;
-    WiFi.disconnect();
-  }
-}
 
 void generateRandomIV() {
   DEBUG_PRINT("CRYPTO", "Generating new random IV");

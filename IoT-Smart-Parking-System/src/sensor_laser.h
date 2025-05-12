@@ -12,6 +12,7 @@ void initializeVL53LOXArray(uint8_t sensorCount, const uint8_t *sensorAddresses,
   */
 
   // Reset all sensors
+  DEBUG(VL53L0X, "Resetting all sensors");
   for (uint8_t i = 0; i < sensorCount; i++) {
     pinMode(shutdownPins[i], OUTPUT);
     digitalWrite(shutdownPins[i], LOW);
@@ -24,9 +25,10 @@ void initializeVL53LOXArray(uint8_t sensorCount, const uint8_t *sensorAddresses,
     delay(10);
 
     if (!lox[i].begin(sensorAddresses[i])) {
-      Serial.print(F("Failed to initialize VL53L0X at index "));
-      Serial.println(i);
+      DEBUG(VL53L0X, "Failed to initialize VL53L0X at index %d", i);
       while (1);
+    } else {
+      DEBUG(VL53L0X, "VL53L0X %d initialized at address 0x%02X", i, sensorAddresses[i]);
     }
   }
   
