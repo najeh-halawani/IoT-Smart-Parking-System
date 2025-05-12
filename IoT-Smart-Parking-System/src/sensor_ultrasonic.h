@@ -25,7 +25,7 @@ float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
   }
 
   // Debug: Start of sensor reading
-  DEBUG_SENSOR("Reading sensor %d with %d samples", sensorIdx, samples);
+   DEBUG(SENSOR_US,"Reading sensor %d with %d samples", sensorIdx, samples);
 
   // Array to store distance readings
   float readings[samples];
@@ -45,7 +45,7 @@ float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
 
     // Check if the echo signal was received
     if (duration == 0) {
-      DEBUG_SENSOR("Sensor %d reading %d timeout", sensorIdx, i); // Log a timeout
+       DEBUG(SENSOR_US,"Sensor %d reading %d timeout", sensorIdx, i); // Log a timeout
       continue; // Skip to the next iteration
     }
 
@@ -55,10 +55,10 @@ float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
     // Check if the distance is within the valid range
     if (distance >= 2 && distance <= 400) {
       readings[validReadings++] = distance; // Store the valid reading
-      DEBUG_SENSOR("Sensor %d reading %d: %.1f cm (duration: %ld μs)", 
+       DEBUG(SENSOR_US,"Sensor %d reading %d: %.1f cm (duration: %ld μs)", 
                    sensorIdx, i, distance, duration);
     } else {
-      DEBUG_SENSOR("Sensor %d reading %d out of range: %.1f cm", sensorIdx, i, distance);
+       DEBUG(SENSOR_US,"Sensor %d reading %d out of range: %.1f cm", sensorIdx, i, distance);
     }
 
     delay(50); // Short delay between samples
@@ -66,7 +66,7 @@ float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
 
   // Check if there were any valid readings
   if (validReadings == 0) {
-    DEBUG_SENSOR("Sensor %d: No valid readings", sensorIdx); // Log no valid readings
+     DEBUG(SENSOR_US,"Sensor %d: No valid readings", sensorIdx); // Log no valid readings
     return -1; // Return -1 to indicate an error
   }
 
@@ -83,7 +83,27 @@ float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
 
   // Calculate the median of the valid readings
   float median = readings[validReadings / 2];
-  DEBUG_SENSOR("Sensor %d median: %.1f cm (valid readings: %d/%d)", 
+   DEBUG(SENSOR_US,"Sensor %d median: %.1f cm (valid readings: %d/%d)", 
                sensorIdx, median, validReadings, samples);
   return median; // Return the median distance
+}
+
+
+void testUltrasonicSensors(){
+    // Test the ultrasonic sensor
+    for (int i = 0; i < NUM_SENSORS; i++) {
+        // Get the distance measurement
+        float distance = getMedianDistance(i, SENSOR_SAMPLES);
+        // Print the result to the serial monitor
+        if (distance == -1) {
+            Serial.printf("Sensor %d: No valid readings\n", i);
+        } else if (distance < 2 || distance > 400) {
+            Serial.printf("Sensor %d: Out of range (%.1f cm)\n", i, distance);
+        } else {
+            Serial.printf("Sensor %d: Distance = %.1f cm\n", i, distance);
+        }
+    }
+
+    // Wait before the next measurement
+    delay(1000); // 1 second delay
 }
