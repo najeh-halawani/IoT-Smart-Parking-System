@@ -31,6 +31,7 @@
 #define DEEP_SLEEP_START_HOUR 2
 #define DEEP_SLEEP_END_HOUR 5
 #define DEEP_SLEEP_END_MINUTE 30
+#define LIGHT_SLEEP_DURATION 60 // in seconds
 // ---------------------------------------------------------
 
 // ------ AES Encryption Configuration ---------------------

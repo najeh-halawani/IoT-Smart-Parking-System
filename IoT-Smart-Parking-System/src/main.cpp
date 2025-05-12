@@ -41,6 +41,15 @@ WiFiClientSecure espClient;
 // ------ MQTT variables -----------------
 PubSubClient client(espClient);
 
+// ------ NVS variables ------------------
+extern Preferences preferences;
+extern bool usSensorsLastState[NUM_ULTRASONIC_SENSORS];
+extern bool tofSensorsLastState[NUM_VL53L0X_SENSORS];
+
+// // External state dependencies
+
+
+
 
 void setup() {
     // Initialize serial communication
