@@ -1,1 +1,94 @@
 #pragma once
+
+#define NUM_SENSORS 1
+#define SENSOR_SAMPLES 5
+
+const int trigPins[NUM_SENSORS] = { 19 };
+const int echoPins[NUM_SENSORS] = { 20 };
+
+struct SensorData {
+  int sensorId;
+  float distance;
+  unsigned long timestamp;
+};
+
+
+/**
+ * @brief Reads multiple distance samples from an ultrasonic sensor, filters invalid readings, 
+ *        and calculates the median distance.
+ * 
+ * @param sensorIdx The index of the sensor to read from (0 to NUM_SENSORS - 1).
+ * @param samples The number of distance samples to take (default is SENSOR_SAMPLES).
+ * @return float The median distance in centimeters. Returns -1 if no valid readings are obtained 
+ *               or if the sensor index is invalid.
+ */
+float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
+  // Check if the sensor index is valid
+  if (sensorIdx >= NUM_SENSORS) {
+    logError("Invalid sensor index"); // Log an error if the index is invalid
+    return -1; // Return -1 to indicate an error
+  }
+
+  // Debug: Start of sensor reading
+  DEBUG_SENSOR("Reading sensor %d with %d samples", sensorIdx, samples);
+
+  // Array to store distance readings
+  float readings[samples];
+  int validReadings = 0; // Counter for valid readings
+
+  // Loop to take multiple samples
+  for (int i = 0; i < samples; i++) {
+    // Trigger the ultrasonic sensor
+    digitalWrite(trigPins[sensorIdx], LOW);
+    delayMicroseconds(2); // Ensure a clean LOW pulse
+    digitalWrite(trigPins[sensorIdx], HIGH);
+    delayMicroseconds(10); // Send a 10-microsecond HIGH pulse
+    digitalWrite(trigPins[sensorIdx], LOW);
+
+    // Measure the duration of the echo signal
+    long duration = pulseIn(echoPins[sensorIdx], HIGH, 30000); // Timeout after 30ms
+
+    // Check if the echo signal was received
+    if (duration == 0) {
+      DEBUG_SENSOR("Sensor %d reading %d timeout", sensorIdx, i); // Log a timeout
+      continue; // Skip to the next iteration
+    }
+
+    // Calculate the distance in cm
+    float distance = duration * 0.034 / 2;
+
+    // Check if the distance is within the valid range
+    if (distance >= 2 && distance <= 400) {
+      readings[validReadings++] = distance; // Store the valid reading
+      DEBUG_SENSOR("Sensor %d reading %d: %.1f cm (duration: %ld μs)", 
+                   sensorIdx, i, distance, duration);
+    } else {
+      DEBUG_SENSOR("Sensor %d reading %d out of range: %.1f cm", sensorIdx, i, distance);
+    }
+
+    delay(50); // Short delay between samples
+  }
+
+  // Check if there were any valid readings
+  if (validReadings == 0) {
+    DEBUG_SENSOR("Sensor %d: No valid readings", sensorIdx); // Log no valid readings
+    return -1; // Return -1 to indicate an error
+  }
+
+  // Sort the valid readings to calculate the median
+  for (int i = 0; i < validReadings - 1; i++) {
+    for (int j = 0; j < validReadings - i - 1; j++) {
+      if (readings[j] > readings[j + 1]) {
+        float temp = readings[j];
+        readings[j] = readings[j + 1];
+        readings[j + 1] = temp;
+      }
+    }
+  }
+
+  // Calculate the median of the valid readings
+  float median = readings[validReadings / 2];
+  DEBUG_SENSOR("Sensor %d median: %.1f cm (valid readings: %d/%d)", 
+               sensorIdx, median, validReadings, samples);
+  return median; // Return the median distance
+}
