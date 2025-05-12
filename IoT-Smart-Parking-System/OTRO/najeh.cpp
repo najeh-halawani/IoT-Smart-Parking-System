@@ -7,21 +7,14 @@
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
 #include <Preferences.h>
-#include <esp_task_wdt.h>
 #include <time.h>  
 
 #define NUM_SENSORS 1
 #define THRESHOLD_DISTANCE 50
 #define HYSTERESIS 5
-#define DEEP_SLEEP_START_HOUR 2
-#define DEEP_SLEEP_END_HOUR 5
-#define DEEP_SLEEP_END_MINUTE 30
+
 #define SENSOR_READ_INTERVAL 2000
 #define SENSOR_SAMPLES 5
-#define WDT_TIMEOUT_S 10
-
-const int trigPins[NUM_SENSORS] = { 19 };
-const int echoPins[NUM_SENSORS] = { 20 };
 
 const char* nodeId = "NODE_001";
 Preferences preferences;
@@ -45,15 +38,9 @@ struct SensorData {
   unsigned long timestamp;
 };
 
-void connectMQTT();
 bool isTimeInRange(int currentHour, int currentMinute);
 void generateRandomIV();
 void syncInternalRTC();
-
-void logError(const char* message) {
-  DEBUG_ERROR("%s", message);
-  DEBUG(ERROR)
-}
 
 float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
   if (sensorIdx >= NUM_SENSORS) {
@@ -115,7 +102,6 @@ float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
                sensorIdx, median, validReadings, samples);
   return median;
 }
-
 
 void generateRandomIV() {
   DEBUG_PRINT("CRYPTO", "Generating new random IV");
@@ -349,89 +335,8 @@ void mqttTask(void* pvParameters) {
   }
 }
 
-void sleepTask(void* pvParameters) {
-  DEBUG_SLEEP("Sleep task started on core %d", xPortGetCoreID());
-  preferences.begin("sleep-config", false);
-  int wakeHour = preferences.getInt("wake-hour", DEEP_SLEEP_END_HOUR);
-  int wakeMinute = preferences.getInt("wake-min", DEEP_SLEEP_END_MINUTE);
-  DEBUG_SLEEP("Wake time configuration: %02d:%02d", wakeHour, wakeMinute);
-
-  while (1) {
-    time_t now;
-    struct tm timeinfo;
-    time(&now);
-    localtime_r(&now, &timeinfo);
-
-    int hour = timeinfo.tm_hour;
-    int minute = timeinfo.tm_min;
-    DEBUG_SLEEP("Current time: %02d:%02d:%02d", hour, minute, timeinfo.tm_sec);
-
-    bool isDeepSleepTime = isTimeInRange(hour, minute);
-    DEBUG_SLEEP("Deep sleep time: %s", isDeepSleepTime ? "YES" : "NO");
-
-    if (isDeepSleepTime) {
-      struct tm wakeupTime = timeinfo;
-      wakeupTime.tm_hour = wakeHour;
-      wakeupTime.tm_min = wakeMinute;
-      wakeupTime.tm_sec = 0;
-
-      if (hour > wakeHour || (hour == wakeHour && minute >= wakeMinute)) {
-        wakeupTime.tm_mday += 1;
-        DEBUG_SLEEP("Wake time is earlier today, scheduling for tomorrow");
-      }
-
-      time_t wakeupEpoch = mktime(&wakeupTime);
-      int64_t sleepSeconds = wakeupEpoch - now;
-      DEBUG_SLEEP("Calculated sleep duration: %lld seconds", sleepSeconds);
-
-      if (sleepSeconds > 0 && sleepSeconds < 24 * 60 * 60) {
-        DEBUG_SLEEP("Entering deep sleep for %lld seconds until %02d:%02d",
-                  sleepSeconds, wakeHour, wakeMinute);
-
-        DEBUG_SLEEP("Saving state to preferences before sleep");
-        preferences.putBool("firstboot", false);
-        for (int i = 0; i < NUM_SENSORS; i++) {
-          preferences.putBool(String("state" + String(i)).c_str(), lastState[i]);
-          DEBUG_SLEEP("Saved sensor %d state: %s", i, lastState[i] ? "OCCUPIED" : "VACANT");
-        }
-        preferences.end();
-
-        esp_sleep_enable_timer_wakeup(sleepSeconds * 1000000ULL);
-        DEBUG_SLEEP("Deep sleep starting now...");
-        Serial.flush(); // Make sure debug output is sent before sleep
-        esp_deep_sleep_start();
-      } else {
-        DEBUG_ERROR("Invalid sleep duration calculated: %lld seconds", sleepSeconds);
-      }
-    } else {
-      DEBUG_SLEEP("Not deep sleep time, light sleeping for 1 second");
-      esp_sleep_enable_timer_wakeup(1 * 1000000ULL);
-      esp_light_sleep_start();
-    }
-
-    vTaskDelay(pdMS_TO_TICKS(60000));
-  }
-}
-
-bool isTimeInRange(int currentHour, int currentMinute) {
-  DEBUG_SLEEP("Checking if %02d:%02d is in sleep time range (%02d:00-%02d:%02d)", 
-              currentHour, currentMinute,
-              DEEP_SLEEP_START_HOUR, DEEP_SLEEP_END_HOUR, DEEP_SLEEP_END_MINUTE);
-              
-  if (currentHour < DEEP_SLEEP_START_HOUR || currentHour > DEEP_SLEEP_END_HOUR) {
-    return false;
-  }
-
-  if (currentHour == DEEP_SLEEP_END_HOUR && currentMinute >= DEEP_SLEEP_END_MINUTE) {
-    return false;
-  }
-
-  return true;
-}
 
 void setup() {
-
-  esp_task_wdt_init(WDT_TIMEOUT_S, true);
   
   preferences.begin("parking-sys", false);
   firstBoot = preferences.getBool("firstboot", true);
@@ -452,8 +357,6 @@ void setup() {
     preferences.getBytes("aes_iv", aes_iv, 16);
     DEBUG_PRINT("CRYPTO", "Loaded IV from preferences");
   }
-
-  randomSeed(esp_random());
 
   DEBUG_PRINT("SYSTEM", "Initializing pins for %d sensors", NUM_SENSORS);
   for (int i = 0; i < NUM_SENSORS; i++) {
@@ -480,48 +383,16 @@ void setup() {
   BaseType_t xReturned;
 
   DEBUG_PRINT("SYSTEM", "Creating tasks");
-  xReturned = xTaskCreatePinnedToCore(
-    sensorTask,
-    "sensorTask",
-    3072,
-    NULL,
-    1,
-    NULL,
-    0
-  );
+  xReturned = xTaskCreatePinnedToCore(sensorTask,"sensorTask",3072,NULL,1,NULL,0);
   if (xReturned != pdPASS) logError("Failed to create sensor task");
 
-  xReturned = xTaskCreatePinnedToCore(
-    processingTask,
-    "processingTask",
-    3072,
-    NULL,
-    2,
-    NULL,
-    1
-  );
+  xReturned = xTaskCreatePinnedToCore(processingTask,"processingTask",3072,NULL,2,NULL,1);
   if (xReturned != pdPASS) logError("Failed to create processing task");
 
-  xReturned = xTaskCreatePinnedToCore(
-    mqttTask,
-    "mqttTask",
-    8192,
-    NULL,
-    3,
-    &mqttTaskHandle,
-    1
-  );
+  xReturned = xTaskCreatePinnedToCore(,"mqttTask",8192,NULL,3,&mqttTaskHandle,1);
   if (xReturned != pdPASS) logError("Failed to create MQTT task");
 
-  xReturned = xTaskCreatePinnedToCore(
-    sleepTask,
-    "sleepTask",
-    3072,
-    NULL,
-    0,
-    NULL,
-    0
-  );
+  xReturned = xTaskCreatePinnedToCore(sleepTask,"sleepTask",3072,NULL,0,NULL,0);
   if (xReturned != pdPASS) logError("Failed to create sleep task");
 
   DEBUG_PRINT("SYSTEM", "Setup complete, all tasks created successfully");

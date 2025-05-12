@@ -14,6 +14,7 @@
 
 /* Include necessary libraries */
 #include <Arduino.h>
+#include <esp_task_wdt.h>
 
 /* Include header files */
 #include "debug.h"
@@ -22,6 +23,7 @@
 #include "wifi_comms.h"
 #include "sensor_laser.h"
 #include "sensor_ultrasonic.h"
+#include "sleep.h"
 #include "tasks.h"
 #include "aes.h"
 
@@ -43,13 +45,19 @@ PubSubClient client(espClient);
 void setup() {
     // Initialize serial communication
     Serial.begin(115200);               delay(300);
-    displaySystemInfo();              
+    displaySystemInfo();           
+
     // Initialize I2C communication
     Wire.begin(I2C_SDA, I2C_SCL);       delay(100);
+    
     // Initialize VL53L0X sensors
     initializeVL53LOXArray(NUM_VL53L0X_SENSORS, loxAddresses, shutdownPins, lox);
+
+    // Initialize Watchdog timer
+    esp_task_wdt_init(WDT_TIMEOUT_S, true);
+
+    randomSeed(esp_random());
 }
 
 void loop() {
-testUltrasonicSensors();
 }

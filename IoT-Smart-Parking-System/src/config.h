@@ -2,8 +2,13 @@
 
 /* System Configuration File */
 
-// ------ System Information --------------------------
+// ------ System Information ------------------------------
 #define CONFIG_VERSION 1
+// --------------------------------------------------------
+
+// ------ FREE_RTOS Configuration -------------------------
+#define WDT_TIMEOUT_S 10
+// --------------------------------------------------------
 
 // ------ WiFi Configuration ------------------------------
 #define WIFI_SSID "FRITZ!Box 7530 LP"
@@ -17,12 +22,18 @@
 #define MQTT_CLIENT_ID "..."
 // --------------------------------------------------------
 
-// ------ I2C Configuration --------------------------------
+// ------ I2C Configuration -------------------------------
 #define I2C_SDA 41
 #define I2C_SCL 42
-// ----------------------------------------------------------
+// ---------------------------------------------------------
 
-// ------ AES Encryption Configuration --------------------
+// ------ DEEP/LIGHT Sleep Configuration -------------------
+#define DEEP_SLEEP_START_HOUR 2
+#define DEEP_SLEEP_END_HOUR 5
+#define DEEP_SLEEP_END_MINUTE 30
+// ---------------------------------------------------------
+
+// ------ AES Encryption Configuration ---------------------
 uint8_t aes_key[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F };
 uint8_t aes_iv[16];
 // ---------------------------------------------------------
