@@ -51,5 +51,5 @@ void setup() {
 }
 
 void loop() {
-
+testUltrasonicSensors();
 }
