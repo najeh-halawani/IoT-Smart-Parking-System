@@ -1,7 +1,5 @@
 #include <heltec.h>
 #include <AESLib.h>
-#include <NTPClient.h>
-#include <WiFiUdp.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/queue.h>
@@ -9,8 +7,6 @@
 #include <Preferences.h>
 #include <time.h>  
 
-#define NUM_SENSORS 1
-#define THRESHOLD_DISTANCE 50
 #define HYSTERESIS 5
 
 #define SENSOR_READ_INTERVAL 2000
@@ -18,8 +14,7 @@
 
 const char* nodeId = "NODE_001";
 
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000);
+
 
 
 bool lastState[NUM_SENSORS] = { false };
@@ -28,78 +23,8 @@ bool firstBoot = true;
 SemaphoreHandle_t stateMutex;
 QueueHandle_t distanceQueue;
 TaskHandle_t mqttTaskHandle;
-unsigned long lastSuccessfulConnection = 0;
-unsigned long connectionAttempts = 0;
 
-struct SensorData {
-  int sensorId;
-  float distance;
-  unsigned long timestamp;
-};
 
-void generateRandomIV();
-void syncInternalRTC();
-
-float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
-  if (sensorIdx >= NUM_SENSORS) {
-    logError("Invalid sensor index");
-    return -1;
-  }
-
-  // Debug: Start of sensor reading
-  DEBUG_SENSOR("Reading sensor %d with %d samples", sensorIdx, samples);
-  
-  float readings[samples];
-  int validReadings = 0;
-
-  for (int i = 0; i < samples; i++) {
-    digitalWrite(trigPins[sensorIdx], LOW);
-    delayMicroseconds(2);
-    digitalWrite(trigPins[sensorIdx], HIGH);
-    delayMicroseconds(10);
-    digitalWrite(trigPins[sensorIdx], LOW);
-
-    long duration = pulseIn(echoPins[sensorIdx], HIGH, 30000);
-
-    if (duration == 0) {
-      DEBUG_SENSOR("Sensor %d reading %d timeout", sensorIdx, i);
-      continue;
-    }
-
-    float distance = duration * 0.034 / 2;
-
-    if (distance >= 2 && distance <= 400) {
-      readings[validReadings++] = distance;
-      DEBUG_SENSOR("Sensor %d reading %d: %.1f cm (duration: %ld μs)", 
-                   sensorIdx, i, distance, duration);
-    } else {
-      DEBUG_SENSOR("Sensor %d reading %d out of range: %.1f cm", sensorIdx, i, distance);
-    }
-
-    delay(50);
-  }
-
-  if (validReadings == 0) {
-    DEBUG_SENSOR("Sensor %d: No valid readings", sensorIdx);
-    return -1;
-  }
-
-  // Sort readings for median calculation
-  for (int i = 0; i < validReadings - 1; i++) {
-    for (int j = 0; j < validReadings - i - 1; j++) {
-      if (readings[j] > readings[j + 1]) {
-        float temp = readings[j];
-        readings[j] = readings[j + 1];
-        readings[j + 1] = temp;
-      }
-    }
-  }
-
-  float median = readings[validReadings / 2];
-  DEBUG_SENSOR("Sensor %d median: %.1f cm (valid readings: %d/%d)", 
-               sensorIdx, median, validReadings, samples);
-  return median;
-}
 
 void generateRandomIV() {
   DEBUG_PRINT("CRYPTO", "Generating new random IV");
@@ -117,33 +42,6 @@ void padInput(const char* input, uint8_t* padded, size_t input_len) {
     padded[i] = padValue;
   }
   DEBUG_PRINT("CRYPTO", "Padded input from %d to %d bytes", input_len, input_len + padValue);
-}
-
-void syncInternalRTC() {
-  DEBUG_PRINT("TIME", "Synchronizing internal RTC with NTP");
-  if (WiFi.status() != WL_CONNECTED) {
-    connectWiFi();
-  }
-  if (WiFi.status() == WL_CONNECTED) {
-    timeClient.begin();
-    if (timeClient.update()) {
-      time_t now = timeClient.getEpochTime();
-      struct tm timeinfo;
-      localtime_r(&now, &timeinfo);
-      
-      struct timeval tv = { .tv_sec = now, .tv_usec = 0 };
-      settimeofday(&tv, NULL);
-      DEBUG_PRINT("TIME", "RTC synchronized: %04d-%02d-%02d %02d:%02d:%02d", 
-                 timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday,
-                 timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
-    } else {
-      logError("NTP update failed");
-    }
-    WiFi.disconnect(true);
-    delay(100);
-  } else {
-    DEBUG_ERROR("Failed to sync RTC: WiFi not connected");
-  }
 }
 
 void sensorTask(void* pvParameters) {
@@ -333,12 +231,7 @@ void mqttTask(void* pvParameters) {
   }
 }
 
-
 void setup() {
-  
-  preferences.begin("parking-sys", false);
-  firstBoot = preferences.getBool("firstboot", true);
-  DEBUG_PRINT("SYSTEM", "First boot: %s", firstBoot ? "YES" : "NO");
 
   if (!firstBoot) {
     for (int i = 0; i < NUM_SENSORS; i++) {
@@ -362,11 +255,6 @@ void setup() {
     pinMode(echoPins[i], INPUT);
     digitalWrite(trigPins[i], LOW);
     DEBUG_PRINT("SYSTEM", "Sensor %d: TRIG pin %d, ECHO pin %d", i, trigPins[i], echoPins[i]);
-  }
-
-  if (firstBoot) {
-    DEBUG_PRINT("SYSTEM", "First boot, synchronizing RTC");
-    syncInternalRTC();
   }
 
   DEBUG_PRINT("SYSTEM", "Creating FreeRTOS objects");
@@ -394,9 +282,4 @@ void setup() {
   if (xReturned != pdPASS) logError("Failed to create sleep task");
 
   DEBUG_PRINT("SYSTEM", "Setup complete, all tasks created successfully");
-}
-
-void loop() {
-  // This task does nothing as all functionality is in FreeRTOS tasks
-  vTaskDelay(portMAX_DELAY);
 }

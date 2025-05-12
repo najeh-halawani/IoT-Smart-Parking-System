@@ -15,6 +15,8 @@
 /* Include necessary libraries */
 #include <Arduino.h>
 #include <esp_task_wdt.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 
 /* Include header files */
 #include "debug.h"
@@ -24,14 +26,18 @@
 #include "sensor_laser.h"
 #include "sensor_ultrasonic.h"
 #include "sleep.h"
-#include "tasks.h"
 #include "aes.h"
 
 /* Declaration of global variables */
 
+// ------ Ultrasonic sensor instances ----
+UltrasonicSensor* usSensors[NUM_ULTRASONIC_SENSORS];
+
 // ------ VL53L0X sensor instances -------
-Adafruit_VL53L0X lox[NUM_VL53L0X_SENSORS];
-VL53L0X_RangingMeasurementData_t measures[NUM_VL53L0X_SENSORS];
+TimeOfFlightSensor* tofSensors[NUM_VL53L0X_SENSORS];
+
+// ------ All sensors array --------------
+DistanceSensor* allSensors[NUM_ULTRASONIC_SENSORS + NUM_VL53L0X_SENSORS];
 
 // ------ WiFi variables -----------------
 unsigned long lastSuccessfulConnection = 0;
@@ -42,16 +48,15 @@ WiFiClientSecure espClient;
 PubSubClient client(espClient);
 
 // ------ NVS variables ------------------
-extern Preferences preferences;
-extern bool usSensorsLastState[NUM_ULTRASONIC_SENSORS];
-extern bool tofSensorsLastState[NUM_VL53L0X_SENSORS];
-
-// // External state dependencies
-
-
-
+bool firstBoot = true;
+Preferences preferences;
 
 void setup() {
+
+    // Initialize NVS
+    preferences.begin("parking-sys", false);
+    firstBoot = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER ? false : true;
+
     // Initialize serial communication
     Serial.begin(115200);               delay(300);
     displaySystemInfo();           
@@ -59,15 +64,47 @@ void setup() {
     // Initialize I2C communication
     Wire.begin(I2C_SDA, I2C_SCL);       delay(100);
     
+    // Initialize ultrasonic sensors
+    initializeUltrasonicArray(usSensors, NUM_ULTRASONIC_SENSORS);
+
     // Initialize VL53L0X sensors
-    initializeVL53LOXArray(NUM_VL53L0X_SENSORS, loxAddresses, shutdownPins, lox);
+    initializeVL53LOXArray(tofSensors, NUM_VL53L0X_SENSORS);
+
+    // Populate allSensors array
+    int sensorCount = buildUnifiedSensorArray(usSensors, tofSensors, allSensors);
+
+    // Initialize WiFi connection
+    connectWiFi(lastSuccessfulConnection, connectionAttempts);
+
+    // Check if it's the first boot. If so, initialize the system.
+    if (firstBoot) {
+        DEBUG("SYSTEM", "First boot detected, initializing system.");
+        // Setup internal RTC using NTP
+        syncInternalRTC(lastSuccessfulConnection, connectionAttempts);
+        // Initialize random seed
+        randomSeed(esp_random());
+    } else {
+        DEBUG("SYSTEM", "Not the first boot, loading previous state.");
+        // Load sensor states from NVS
+        for (int i = 0; i < sensorCount; i++) {
+           allSensors[i]->loadState(preferences);
+        }
+    }
+
+    // Creation of FreeRTOS tasks
+    BaseType_t xReturned;
+
+    // > Sleep Task
+    static SleepTaskParams sleepParams = {.prefs = &preferences, .sensors = allSensors, .sensorCount = sensorCount};
+    xReturned = xTaskCreatePinnedToCore(sleepTask, "sleepTask", 4096, &sleepParams, 1, NULL, 0);
+    if (xReturned != pdPASS) logError("Failed to create sleep task");
 
     // Initialize Watchdog timer
     esp_task_wdt_init(WDT_TIMEOUT_S, true);
-
-    randomSeed(esp_random());
 }
 
 void loop() {
-  testLaserSensors();
+    delay(2500);
+    testUltrasonicSensors(usSensors, NUM_ULTRASONIC_SENSORS);
+    // testVL53LOXSensors(tofSensors, NUM_VL53L0X_SENSORS);
 }
