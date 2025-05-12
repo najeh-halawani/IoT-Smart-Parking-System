@@ -1,37 +1,36 @@
 #pragma once
+#include <Adafruit_VL53L0X.h>
+#include <Wire.h>
+#include "config.h"
 
-// #define NUM_SENSORS 2  // Change to 4 if you use 4 sensors
+void initializeVL53LOXArray(uint8_t sensorCount, const uint8_t *sensorAddresses, const uint8_t *shutdownPins, Adafruit_VL53L0X *lox) {
+  /* 
+    1. Reset all sensors by setting XSHUT to LOW
+    2. Activate one sensor at a time by setting XSHUT to HIGH
+    3. Initialize the sensor with the corresponding I2C address
+    4. Repeat for all sensors
+  */
 
-// // I2C addresses to assign
-// const uint8_t loxAddresses[NUM_SENSORS] = {0x30, 0x31}; 
+  // Reset all sensors
+  for (uint8_t i = 0; i < sensorCount; i++) {
+    pinMode(shutdownPins[i], OUTPUT);
+    digitalWrite(shutdownPins[i], LOW);
+  }
+  delay(10);
 
-// // Corresponding shutdown pins for each sensor
-// const uint8_t shutdownPins[NUM_SENSORS] = {48, 47};  // Adjust pins accordingly
+  // Activate one sensor at a time
+  for (uint8_t i = 0; i < sensorCount; i++) {
+    digitalWrite(shutdownPins[i], HIGH);
+    delay(10);
 
-// // Sensor instances and measurement data
-// Adafruit_VL53L0X lox[NUM_SENSORS];
-// VL53L0X_RangingMeasurementData_t measures[NUM_SENSORS];
-
-// void setSensorIDs() {
-//   // Reset all sensors
-//   for (int i = 0; i < NUM_SENSORS; i++) {
-//     pinMode(shutdownPins[i], OUTPUT);
-//     digitalWrite(shutdownPins[i], LOW);
-//   }
-//   delay(10);
-
-//   for (int i = 0; i < NUM_SENSORS; i++) {
-//     // Activate one sensor at a time
-//     digitalWrite(shutdownPins[i], HIGH);
-//     delay(10);
-
-//     if (!lox[i].begin(loxAddresses[i])) {
-//       Serial.print(F("Failed to initialize VL53L0X at index "));
-//       Serial.println(i);
-//       while (1);
-//     }
-//   }
-// }
+    if (!lox[i].begin(sensorAddresses[i])) {
+      Serial.print(F("Failed to initialize VL53L0X at index "));
+      Serial.println(i);
+      while (1);
+    }
+  }
+  
+}
 
 // void readSensors() {
 //   for (int i = 0; i < NUM_SENSORS; i++) {
@@ -47,18 +46,4 @@
 //     Serial.print(F("  "));
 //   }
 //   Serial.println();
-// }
-
-// void setup() {
-//   Serial.begin(115200);
-//   Wire.begin(41, 42);  // Use appropriate SDA/SCL pins
-//   delay(100);
-
-//   Serial.println(F("Initializing shutdown pins..."));
-//   setSensorIDs();
-// }
-
-// void loop() {
-//   readSensors();
-//   delay(200);
 // }

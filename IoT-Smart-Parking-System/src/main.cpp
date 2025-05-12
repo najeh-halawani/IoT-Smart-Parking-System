@@ -12,11 +12,9 @@
     * @author3 Najeh Halawani
 */
 
-// Include necessary libraries
-#include <Wire.h>
-#include <Adafruit_VL53L0X.h>
+/* Include necessary libraries */
 
-// Include header files
+/* Include header files */
 #include "config.h"
 #include "utils.h"
 #include "wifi_comms.h"
@@ -25,9 +23,19 @@
 #include "tasks.h"
 #include "aes.h"
 
+/* Declaration of global variables */
+
+// ------ VL53L0X sensor instances -------
+Adafruit_VL53L0X lox[NUM_VL53L0X_SENSORS];
+VL53L0X_RangingMeasurementData_t measures[NUM_VL53L0X_SENSORS];
+
 void setup() {
-  // Initialize serial communication
-  Serial.begin(115200);
+    // Initialize serial communication
+    Serial.begin(115200);
+    // Initialize I2C communication
+    Wire.begin(I2C_SDA, I2C_SCL);       delay(100);
+    // Initialize VL53L0X sensors
+    initializeVL53LOXArray(NUM_VL53L0X_SENSORS, loxAddresses, shutdownPins, lox);
 }
 
 void loop() {
