@@ -17,7 +17,6 @@
 #define SENSOR_SAMPLES 5
 
 const char* nodeId = "NODE_001";
-Preferences preferences;
 
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000);
@@ -38,7 +37,6 @@ struct SensorData {
   unsigned long timestamp;
 };
 
-bool isTimeInRange(int currentHour, int currentMinute);
 void generateRandomIV();
 void syncInternalRTC();
 
