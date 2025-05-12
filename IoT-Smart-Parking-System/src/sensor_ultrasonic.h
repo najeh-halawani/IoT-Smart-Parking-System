@@ -8,6 +8,17 @@ struct SensorData {
 };
 
 
+// Initialize the ultrasonic sensor pins
+void setupUltrasonicSensors() {
+  DEBUG(PRINT,"SYSTEM", "Initializing ultrasonic sensors");
+  for (int i = 0; i < NUM_SENSORS; i++) {
+    pinMode(trigPins[i], OUTPUT);
+    pinMode(echoPins[i], INPUT);
+    digitalWrite(trigPins[i], LOW);
+    DEBUG(PRINT,"SYSTEM", "Sensor %d: TRIG pin %d, ECHO pin %d", i, trigPins[i], echoPins[i]);
+  }
+} 
+
 /**
  * @brief Reads multiple distance samples from an ultrasonic sensor, filters invalid readings, 
  *        and calculates the median distance.
@@ -49,7 +60,7 @@ float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
       continue; // Skip to the next iteration
     }
 
-    // Calculate the distance in cm
+    // Calculate the distance in cm (0.0343 cm/us is the speed of sound and we divide by 2 for the round trip)	
     float distance = duration * 0.034 / 2;
 
     // Check if the distance is within the valid range
@@ -88,8 +99,16 @@ float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
   return median; // Return the median distance
 }
 
-
+/**
+ * @brief Test function for ultrasonic sensors.
+ * 
+ * This function tests the ultrasonic sensors by taking multiple distance measurements and 
+ * printing the results to the serial monitor. It checks for valid readings and handles out-of-range 
+ * values.
+ */
 void testUltrasonicSensors(){
+    setupUltrasonicSensors(); // Initialize the ultrasonic sensors
+    delay(100); // Short delay to ensure sensors are ready
     // Test the ultrasonic sensor
     for (int i = 0; i < NUM_SENSORS; i++) {
         // Get the distance measurement
