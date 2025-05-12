@@ -11,7 +11,7 @@ struct SensorData {
 // Initialize the ultrasonic sensor pins
 void setupUltrasonicSensors() {
   DEBUG(PRINT,"SYSTEM", "Initializing ultrasonic sensors");
-  for (int i = 0; i < NUM_SENSORS; i++) {
+  for (int i = 0; i < NUM_ULTRASONIC_SENSORS; i++) {
     pinMode(trigPins[i], OUTPUT);
     pinMode(echoPins[i], INPUT);
     digitalWrite(trigPins[i], LOW);
@@ -20,17 +20,17 @@ void setupUltrasonicSensors() {
 } 
 
 /**
- * @brief Reads multiple distance samples from an ultrasonic sensor, filters invalid readings, 
+ * @brief Reads multiple distance samples from an ultrasonic sensor HC-SR04, filters invalid readings, 
  *        and calculates the median distance.
  * 
- * @param sensorIdx The index of the sensor to read from (0 to NUM_SENSORS - 1).
+ * @param sensorIdx The index of the sensor to read from (0 to NUM_ULTRASONIC_SENSORS - 1).
  * @param samples The number of distance samples to take (default is SENSOR_SAMPLES).
  * @return float The median distance in centimeters. Returns -1 if no valid readings are obtained 
  *               or if the sensor index is invalid.
  */
-float getMedianDistance(int sensorIdx, int samples = SENSOR_SAMPLES) {
+float getMedianUltrasonicDistance(int sensorIdx, int samples = ULTRASONIC_SAMPLES) {
   // Check if the sensor index is valid
-  if (sensorIdx >= NUM_SENSORS) {
+  if (sensorIdx >= NUM_ULTRASONIC_SENSORS) {
     DEBUG(ERROR,"Invalid sensor index"); // Log an error if the index is invalid
     return -1; // Return -1 to indicate an error
   }
@@ -110,9 +110,9 @@ void testUltrasonicSensors(){
     setupUltrasonicSensors(); // Initialize the ultrasonic sensors
     delay(100); // Short delay to ensure sensors are ready
     // Test the ultrasonic sensor
-    for (int i = 0; i < NUM_SENSORS; i++) {
+    for (int i = 0; i < NUM_ULTRASONIC_SENSORS; i++) {
         // Get the distance measurement
-        float distance = getMedianDistance(i, SENSOR_SAMPLES);
+        float distance = getMedianUltrasonicDistance(i, ULTRASONIC_SAMPLES);
         // Print the result to the serial monitor
         if (distance == -1) {
             Serial.printf("Sensor %d: No valid readings\n", i);

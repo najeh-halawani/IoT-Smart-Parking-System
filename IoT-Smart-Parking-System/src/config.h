@@ -40,14 +40,15 @@ uint8_t aes_iv[16];
 
 // ------ VL53L0X Time-Of-Flight Sensor Configuration -------
 #define NUM_VL53L0X_SENSORS 2
+#define LASER_SAMPLES 5
 const uint8_t loxAddresses[NUM_VL53L0X_SENSORS] = {0x30, 0x31};
 const uint8_t shutdownPins[NUM_VL53L0X_SENSORS] = {48, 47};
 // ----------------------------------------------------------
 
 // ------ Ultrasonic Sensor Configuration -------------------
-#define NUM_ULTRASONIC_SENSORS 2
+#define NUM_ULTRASONIC_SENSORS 1
 #define NUM_SENSORS 1
-#define SENSOR_SAMPLES 5
+#define ULTRASONIC_SAMPLES 5
 
 const int trigPins[NUM_SENSORS] = { 19 };
 const int echoPins[NUM_SENSORS] = { 20 };

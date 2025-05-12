@@ -60,4 +60,5 @@ void setup() {
 }
 
 void loop() {
+  testLaserSensors();
 }

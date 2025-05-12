@@ -2,6 +2,10 @@
 
 /* General functions definitions */
 
+/**
+ * @brief Displays system information such as version, build date, chip ID, CPU frequency, and free heap memory.
+ *        Only outputs information if DEBUG_MODE is enabled.
+ */
 void displaySystemInfo() {
     #ifdef DEBUG_MODE
         Serial.println("\n\n=== Smart Parking System Debug Mode ===");
@@ -12,6 +16,11 @@ void displaySystemInfo() {
     #endif
 }
 
+/**
+ * @brief Logs an error message to the serial monitor.
+ * 
+ * @param message The error message to log.
+ */
 void logError(const char* message) {
     Serial.printf("[ERROR] %s\n", message);
 }
