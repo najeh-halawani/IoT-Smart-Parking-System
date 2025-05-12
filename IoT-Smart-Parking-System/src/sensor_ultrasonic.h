@@ -1,10 +1,5 @@
 #pragma once
-
-#define NUM_SENSORS 1
-#define SENSOR_SAMPLES 5
-
-const int trigPins[NUM_SENSORS] = { 19 };
-const int echoPins[NUM_SENSORS] = { 20 };
+#include "config.h"
 
 struct SensorData {
   int sensorId;
