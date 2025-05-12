@@ -34,8 +34,8 @@
 #define SENSOR_SAMPLES 5
 #define WDT_TIMEOUT_S 10
 
-const int trigPins[NUM_SENSORS] = { 7 };
-const int echoPins[NUM_SENSORS] = { 6 };
+const int trigPins[NUM_SENSORS] = { 19 };
+const int echoPins[NUM_SENSORS] = { 20 };
 
 const char* ssid = "whitex";
 const char* password = "whitewhite";
@@ -514,18 +514,8 @@ void setup() {
                 ESP.getEfuseMac() & 0xFFFFFF, ESP.getCpuFreqMHz());
   Serial.printf("Free heap: %u bytes\n", ESP.getFreeHeap());
 
-  esp_task_wdt_config_t wdt_config = {
-    .timeout_ms = WDT_TIMEOUT_S * 1000,
-    .idle_core_mask = 0,
-    .trigger_panic = true
-  };
-  esp_err_t wdt_err = esp_task_wdt_init(&wdt_config);
-  if (wdt_err != ESP_OK) {
-    DEBUG_ERROR("Failed to initialize Watchdog Timer: %d", wdt_err);
-  } else {
-    DEBUG_PRINT("SYSTEM", "Watchdog timer initialized with timeout of %d seconds", WDT_TIMEOUT_S);
-  }
-
+  esp_task_wdt_init(WDT_TIMEOUT_S, true);
+  
   preferences.begin("parking-sys", false);
   firstBoot = preferences.getBool("firstboot", true);
   DEBUG_PRINT("SYSTEM", "First boot: %s", firstBoot ? "YES" : "NO");
