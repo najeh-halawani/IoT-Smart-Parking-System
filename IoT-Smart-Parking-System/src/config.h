@@ -16,10 +16,10 @@
 // --------------------------------------------------------
 
 // ------ MQTT Configuration ------------------------------
-#define MQTT_SERVER "192.168.178.50"
+#define MQTT_SERVER " 192.168.178.59"
 #define MQTT_PORT 1883
-#define MQTT_TOPIC ".../..."
-#define MQTT_CLIENT_ID "..."
+#define MQTT_TOPIC "SmartParkingSystem"
+#define MQTT_CLIENT_ID "ESP32_Parking_Sensor"
 // --------------------------------------------------------
 
 // ------ I2C Configuration -------------------------------
