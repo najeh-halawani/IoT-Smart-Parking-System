@@ -1,6 +1,33 @@
 #pragma once
-
+#include "sensor_ultrasonic.h"
+#include "sensor_laser.h"
+#include "DistanceSensor.h"
 /* General functions definitions */
+
+/**
+ * @brief Populates an array of DistanceSensor pointers with the provided ultrasonic and ToF sensors.
+ * 
+ * @param usSensors Array of UltrasonicSensor pointers.
+ * @param tofSensors Array of TimeOfFlightSensor pointers.
+ * @param allSensors Array of DistanceSensor pointers to be populated.
+ * @return The number of sensors added to the allSensors array.
+ */
+
+int buildUnifiedSensorArray(UltrasonicSensor** usSensors, TimeOfFlightSensor** tofSensors, DistanceSensor** allSensors) {
+    int idx = 0;
+
+    // Add ultrasonic sensors
+    for (int i = 0; i < NUM_ULTRASONIC_SENSORS; i++) {
+        allSensors[idx++] = usSensors[i];
+    }
+
+    // Add ToF sensors
+    for (int i = 0; i < NUM_VL53L0X_SENSORS; i++) {
+        allSensors[idx++] = tofSensors[i];
+    }
+
+    return idx;
+}
 
 /**
  * @brief Displays system information such as version, build date, chip ID, CPU frequency, and free heap memory.
