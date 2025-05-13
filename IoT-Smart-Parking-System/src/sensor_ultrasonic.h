@@ -7,7 +7,7 @@ class UltrasonicSensor : public DistanceSensor {
 
 public:
   UltrasonicSensor(const String& id, int trig, int echo)
-    : DistanceSensor(id), trigPin(trig), echoPin(echo) {
+    : DistanceSensor(id, ULTRASONIC_SAMPLES, ULTRASONIC_THRESHOLD_DISTANCE), trigPin(trig), echoPin(echo) {
     pinMode(trigPin, OUTPUT);
     pinMode(echoPin, INPUT);
     digitalWrite(trigPin, LOW);
@@ -30,11 +30,6 @@ public:
     float distance = duration * 0.034 / 2.0;
   
     return (distance >= minValidRange() && distance <= maxValidRange()) ? distance : -1;
-  }
-
-  void updateState() override {
-    float d = getMedianDistance(ULTRASONIC_SAMPLES);
-    setState(d >= 0 && d < ULTRASONIC_THRESHOLD_DISTANCE);
   }
 
   String debugTag() const override {
