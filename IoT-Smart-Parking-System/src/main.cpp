@@ -123,7 +123,7 @@ void setup() {
     xTaskCreatePinnedToCore(deepSleepTask, "sleepTask", 4096, &sleepParams, 1, NULL, 0);
 
     // Create the WiFi and MQTT task
-    xReturned = xTaskCreatePinnedToCore(
+    BaseType_t xReturned = xTaskCreatePinnedToCore(
         wifiMQTTTask,       // Task function
         "WiFiMQTT Task",    // Task name
         4096,               // Stack size in bytes
