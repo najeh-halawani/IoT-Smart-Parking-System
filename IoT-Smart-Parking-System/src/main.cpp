@@ -122,6 +122,21 @@ void setup() {
     static SleepTaskParams sleepParams = {.prefs = &preferences, .sensors = allSensors, .sensorCount = sensorCount};
     xTaskCreatePinnedToCore(deepSleepTask, "sleepTask", 4096, &sleepParams, 1, NULL, 0);
 
+    // Create the WiFi and MQTT task
+    xReturned = xTaskCreatePinnedToCore(
+        wifiMQTTTask,       // Task function
+        "WiFiMQTT Task",    // Task name
+        4096,               // Stack size in bytes
+        NULL,               // Task parameters
+        1,                  // Task priority
+        NULL,               // Task handle (optional)
+        0                   // Core to pin the task to (0 or 1)
+    );
+
+    if (xReturned != pdPASS) {
+        logError("Failed to create WiFiMQTT task");
+    }
+
     // Initialize Watchdog timer
     esp_task_wdt_init(WDT_TIMEOUT_S, true);
 }
