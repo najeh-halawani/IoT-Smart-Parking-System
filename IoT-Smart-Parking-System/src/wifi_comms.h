@@ -23,6 +23,12 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
+#include <config.h>
+
+extern WiFiClientSecure espClient;
+extern PubSubClient client; 
+extern unsigned long lastSuccessfulConnection;
+extern unsigned long connectionAttempts;
 
 void connectWiFi(unsigned long lastSuccessfulConnection, unsigned long connectionAttempts) {
     DEBUG("WIFI", "Connecting to WiFi SSID: %s", WIFI_SSID);
@@ -71,32 +77,44 @@ void connectMQTT(PubSubClient &client, WiFiClientSecure &espClient, const char* 
 }
 
 void testWiFiAndMQTT() {
-    // Test WiFi connection
-    DEBUG(WIFI, "Testing WiFi connection...");
-    connectWiFi(lastSuccessfulConnection, connectionAttempts);
-
-    if (WiFi.status() == WL_CONNECTED) {
-        DEBUG(WIFI, "WiFi connection successful. IP: %s", WiFi.localIP().toString().c_str());
-    } else {
-        DEBUG(WIFI, "WiFi connection failed.");
+    // Check if WiFi is connected
+    if (WiFi.status() != WL_CONNECTED) {
+        DEBUG("WIFI", "WiFi not connected. Attempting to connect...");
+        connectWiFi(lastSuccessfulConnection, connectionAttempts);
+        if (WiFi.status() == WL_CONNECTED)
+        {
+          DEBUG("WIFI", "WiFi connection successful. IP: %s", WiFi.localIP().toString().c_str());
+        } else {
+        DEBUG("WIFI", "WiFi connection failed.");
         return; // Exit the test if WiFi connection fails
     }
 
+    } else {
+        DEBUG("WIFI", "WiFi already connected. IP: %s", WiFi.localIP().toString().c_str());
+    }
+
     // Test MQTT connection
-    DEBUG(MQTT, "Testing MQTT connection...");
+    if (!client.connected()) {
+        DEBUG("MQTT", "MQTT not connected. Attempting to connect...");
     connectMQTT(client, espClient, MQTT_SERVER, MQTT_PORT, MQTT_CLIENT_ID);
 
     if (client.connected()) {
-        DEBUG(MQTT, "MQTT connection successful.");
+        DEBUG("MQTT", "MQTT connection successful.");
 
         // Publish a test message to the MQTT topic
-        const char* testMessage = "ESP32 connected to MQTT broker successfully!";
+        const char* testMessage = "TEST: ESP32 connected to MQTT broker successfully!";
         if (client.publish(MQTT_TOPIC, testMessage)) {
-            DEBUG(MQTT, "Test message published to topic '%s': %s", MQTT_TOPIC, testMessage);
+            DEBUG("MQTT", "Test message published to topic '%s': %s", MQTT_TOPIC, testMessage);
         } else {
-            DEBUG(MQTT, "Failed to publish test message to topic '%s'", MQTT_TOPIC);
+            DEBUG("MQTT", "Failed to publish test message to topic '%s'", MQTT_TOPIC);
         }
     } else {
-        DEBUG(MQTT, "MQTT connection failed.");
+        DEBUG("MQTT", "MQTT connection failed.");
     }
+    
+    } else {
+        DEBUG("MQTT", "MQTT already connected.");
+    }
+
+
 }
