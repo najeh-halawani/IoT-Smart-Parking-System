@@ -142,11 +142,10 @@ void testWiFiAndMQTT()
 }
 
 // FreeRTOS task to handle WiFi and MQTT connection
-void wifiMQTTTask(void *pvParameters)
-{
-
+void wifiMQTTTask(void *pvParameters){
+      DEBUG("WIFI", "WiFiMQTT task started on core %d", xPortGetCoreID());
+ while (true) {
   // Initialize WiFi
-
   if (WiFi.status() != WL_CONNECTED)
   {
     DEBUG("WIFI", "WiFi not connected. Attempting to connect...");
@@ -167,7 +166,6 @@ void wifiMQTTTask(void *pvParameters)
   }
 
   // Initialize MQTT
-
   if (!client.connected())
   {
     DEBUG("MQTT", "MQTT not connected. Attempting to connect...");
@@ -198,4 +196,5 @@ void wifiMQTTTask(void *pvParameters)
     DEBUG("MQTT", "MQTT already connected.");
   }
     vTaskDelay(pdMS_TO_TICKS(10000)); 
+}
 }
