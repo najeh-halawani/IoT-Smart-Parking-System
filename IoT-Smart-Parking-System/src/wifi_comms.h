@@ -21,11 +21,17 @@
  * 7. You can use a the python script to plot the data received from the ESP32.
  */
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
+// #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
-#include <config.h>
+#include <ArduinoJson.h>
+#include <time.h>
+#include "config.h"
+#include "debug.h"
+#include "aes.h"
+#include "spot_occupancy_data.h"
 
-extern WiFiClientSecure espClient;
+// extern WiFiClientSecure espClient;
+extern WiFiClient espClient;
 extern PubSubClient client;
 extern unsigned long lastSuccessfulConnection;
 extern unsigned long connectionAttempts;
@@ -58,9 +64,9 @@ void connectWiFi(unsigned long lastSuccessfulConnection, unsigned long connectio
   }
 }
 
-void connectMQTT(PubSubClient &client, WiFiClientSecure &espClient, const char *mqttServer, uint16_t mqttPort, const char *mqttClientId)
+void connectMQTT(PubSubClient &client, WiFiClient &espClient, const char *mqttServer, uint16_t mqttPort, const char *mqttClientId)
 {
-  espClient.setInsecure(); // Use insecure TLS (no certificate validation)
+  // espClient.setInsecure(); // Use insecure TLS (no certificate validation)
   client.setServer(mqttServer, mqttPort);
 
   DEBUG("MQTT", "Connecting to MQTT server: %s:%d", mqttServer, mqttPort);
@@ -142,59 +148,98 @@ void testWiFiAndMQTT()
 }
 
 // FreeRTOS task to handle WiFi and MQTT connection
-void wifiMQTTTask(void *pvParameters){
-      DEBUG("WIFI", "WiFiMQTT task started on core %d", xPortGetCoreID());
- while (true) {
-  // Initialize WiFi
-  if (WiFi.status() != WL_CONNECTED)
-  {
-    DEBUG("WIFI", "WiFi not connected. Attempting to connect...");
-    connectWiFi(lastSuccessfulConnection, connectionAttempts);
-    if (WiFi.status() == WL_CONNECTED)
-    {
-      DEBUG("WIFI", "WiFi connection successful. IP: %s", WiFi.localIP().toString().c_str());
-    }
-    else
-    {
-      DEBUG("WIFI", "WiFi connection failed.");
-      return; // Exit the test if WiFi connection fails
-    }
-  }
-  else
-  {
-    DEBUG("WIFI", "WiFi already connected. IP: %s", WiFi.localIP().toString().c_str());
-  }
+void wifiMQTTTask(void *pvParameters) {
+    QueueHandle_t mqttDataQueue = *(QueueHandle_t*)pvParameters;
+    DEBUG("WIFI", "WiFiMQTT task started on core %d", xPortGetCoreID());
 
-  // Initialize MQTT
-  if (!client.connected())
-  {
-    DEBUG("MQTT", "MQTT not connected. Attempting to connect...");
-    connectMQTT(client, espClient, MQTT_SERVER, MQTT_PORT, MQTT_CLIENT_ID);
+    // Initialize AES256
+    AES256 aes(aes_key);
 
-    if (client.connected())
-    {
-      DEBUG("MQTT", "MQTT connection successful.");
+    while (true) {
+        // Ensure WiFi is connected
+        if (WiFi.status() != WL_CONNECTED) {
+            DEBUG("WIFI", "WiFi not connected. Attempting to connect...");
+            connectWiFi(lastSuccessfulConnection, connectionAttempts);
+            if (WiFi.status() != WL_CONNECTED) {
+                DEBUG("WIFI", "WiFi connection failed. Retrying in 5s...");
+                vTaskDelay(pdMS_TO_TICKS(5000));
+                continue;
+            }
+            DEBUG("WIFI", "WiFi connected. IP: %s", WiFi.localIP().toString().c_str());
+        }
 
-      // Publish a test message to the MQTT topic
-      const char *testMessage = "TEST: ESP32 connected to MQTT broker successfully!";
-      if (client.publish(MQTT_TOPIC, testMessage))
-      {
-        DEBUG("MQTT", "Test message published to topic '%s': %s", MQTT_TOPIC, testMessage);
-      }
-      else
-      {
-        DEBUG("MQTT", "Failed to publish test message to topic '%s'", MQTT_TOPIC);
-      }
+        // Ensure MQTT is connected
+        if (!client.connected()) {
+            DEBUG("MQTT", "MQTT not connected. Attempting to connect...");
+            connectMQTT(client, espClient, MQTT_SERVER, MQTT_PORT, MQTT_CLIENT_ID);
+            if (!client.connected()) {
+                DEBUG("MQTT", "MQTT connection failed. Retrying in 5s...");
+                vTaskDelay(pdMS_TO_TICKS(5000));
+                continue;
+            }
+            DEBUG("MQTT", "MQTT connected.");
+        }
+
+        // Check for data in the MQTT queue
+        SpotOccupancyData data;
+        JsonDocument doc;
+        JsonArray spots = doc["spots"].to<JsonArray>();
+
+        // Collect all available data from the queue
+        while (xQueueReceive(mqttDataQueue, &data, pdMS_TO_TICKS(100))) {
+            JsonObject spot = spots.add<JsonObject>();
+            spot["id"] = data.spotId;
+            spot["occupied"] = data.occupied;
+            spot["us_distance"] = data.usDistance;
+            spot["tof_distance"] = data.tofDistance;
+            DEBUG("MQTT", "Received spot %d data: occupied=%d, us=%.1f, tof=%.1f",
+                  data.spotId, data.occupied, data.usDistance, data.tofDistance);
+        }
+
+        // Publish if there’s data
+        if (spots.size() > 0) {
+            // Add UTC timestamp
+            time_t now = time(nullptr);
+            char timeStr[25];
+            strftime(timeStr, sizeof(timeStr), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
+            doc["timestamp"] = timeStr;
+
+            // Serialize JSON to string
+            char jsonBuffer[512];
+            size_t jsonLength = serializeJson(doc, jsonBuffer);
+
+            // Pad JSON to multiple of 16 bytes for AES
+            uint8_t paddedInput[512];
+            size_t paddedLength = (jsonLength + 15) & ~15; // Round up to next 16-byte block
+            memcpy(paddedInput, jsonBuffer, jsonLength);
+            for (size_t i = jsonLength; i < paddedLength; i++) {
+                paddedInput[i] = 16 - (jsonLength % 16); // PKCS7 padding
+            }
+
+            // Generate unique IV
+            uint8_t iv[16];
+            generate_iv(iv);
+
+            // Encrypt the padded JSON
+            uint8_t encryptedOutput[512];
+            aes.encryptCBC(paddedInput, encryptedOutput, paddedLength, iv);
+
+            // Prepend IV to encrypted data
+            uint8_t finalOutput[512 + 16];
+            memcpy(finalOutput, iv, 16);
+            memcpy(finalOutput + 16, encryptedOutput, paddedLength);
+
+            // Publish IV + encrypted data
+            if (client.publish(MQTT_TOPIC, finalOutput, paddedLength + 16)) {
+                DEBUG("MQTT", "Published IV + encrypted data to topic '%s' (%d bytes)", MQTT_TOPIC, paddedLength + 16);
+            } else {
+                DEBUG("MQTT", "Failed to publish to topic '%s'", MQTT_TOPIC);
+                xQueueReset(mqttDataQueue); // Clear queue on failure
+            }
+        }
+
+        // Maintain MQTT connection
+        client.loop();
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
-    else
-    {
-      DEBUG("MQTT", "MQTT connection failed.");
-    }
-  }
-  else
-  {
-    DEBUG("MQTT", "MQTT already connected.");
-  }
-    vTaskDelay(pdMS_TO_TICKS(10000)); 
-}
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 /* System Configuration File */
 
 // ------ System Information ------------------------------
@@ -11,12 +13,12 @@
 // --------------------------------------------------------
 
 // ------ WiFi Configuration ------------------------------
-#define WIFI_SSID "FRITZ!Box 7530 LP"
-#define WIFI_PASSWORD "70403295595551907386"
+#define WIFI_SSID "whitex"
+#define WIFI_PASSWORD "whitewhite"
 // --------------------------------------------------------
 
 // ------ MQTT Configuration ------------------------------
-#define MQTT_SERVER " 192.168.178.59"
+#define MQTT_SERVER "broker.hivemq.com"
 #define MQTT_PORT 1883
 #define MQTT_TOPIC "SmartParkingSystem"
 #define MQTT_CLIENT_ID "ESP32_Parking_Sensor"
@@ -39,8 +41,12 @@
 #define MAIN_TASK_RATE 10 // in seconds, will be light sleep duration
 
 // ------ AES Encryption Configuration ---------------------
-uint8_t aes_key[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F };
-uint8_t aes_iv[16];
+uint8_t aes_key[32] = {
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F
+};
 // ---------------------------------------------------------
 
 // ------ General Distance Sensor Configuration -------------
@@ -53,7 +59,7 @@ uint8_t aes_iv[16];
 #define LASER_SAMPLES 5
 #define LASER_THRESHOLD_DISTANCE 50
 #define MIN_LASER_DISTANCE 2
-#define MAX_LASER_DISTANCE 1500
+#define MAX_LASER_DISTANCE 100000
 const uint8_t loxAddresses[NUM_VL53L0X_SENSORS] = { 0x30 };
 const uint8_t loxShutdownPins[NUM_VL53L0X_SENSORS] = { 48 };
 // ----------------------------------------------------------

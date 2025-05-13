@@ -83,7 +83,7 @@ public:
     DEBUG(debugTag().c_str(), "Saved state: %s", isVacant ? "VACANT" : "OCCUPIED");
   }
 
-  bool isOccupied() const { return isVacant; }
+  bool isOccupied() const { return !isVacant; }
   const String& getId() const { return id; }
   void setState(bool state) { isVacant = state; }
 
