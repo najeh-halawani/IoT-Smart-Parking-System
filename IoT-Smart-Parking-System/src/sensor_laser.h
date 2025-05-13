@@ -9,7 +9,8 @@ class TimeOfFlightSensor : public DistanceSensor {
   VL53L0X_RangingMeasurementData_t measure;
 
 public:
-  TimeOfFlightSensor(const String& id) : DistanceSensor(id) {}
+  TimeOfFlightSensor(const String& id)
+  : DistanceSensor(id, LASER_SAMPLES, LASER_THRESHOLD_DISTANCE) {}
 
   float minValidRange() const override { return MIN_LASER_DISTANCE; }
   float maxValidRange() const override { return MAX_LASER_DISTANCE; }
@@ -40,11 +41,6 @@ public:
     if (measure.RangeStatus == 4) return -1;
     float distance = measure.RangeMilliMeter / 10.0;
     return (distance >= minValidRange() && distance <= maxValidRange()) ? distance : -1;
-  }
-
-  void updateState() override {
-    float d = getMedianDistance(LASER_SAMPLES);
-    setState(d >= 0 && d < LASER_THRESHOLD_DISTANCE);
   }
 
   String debugTag() const override {

@@ -44,7 +44,7 @@ uint8_t aes_iv[16];
 // ---------------------------------------------------------
 
 // ------ General Distance Sensor Configuration -------------
-
+#define HYSTERESIS 5
 // ----------------------------------------------------------
 
 // ------ VL53L0X Time-Of-Flight Sensor Configuration -------

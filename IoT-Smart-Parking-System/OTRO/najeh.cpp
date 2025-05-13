@@ -7,24 +7,16 @@
 #include <Preferences.h>
 #include <time.h>  
 
-#define HYSTERESIS 5
-
 #define SENSOR_READ_INTERVAL 2000
 #define SENSOR_SAMPLES 5
 
 const char* nodeId = "NODE_001";
 
-
-
-
-bool lastState[NUM_SENSORS] = { false };
 float lastDistance[NUM_SENSORS] = { 0 };
-bool firstBoot = true;
+
 SemaphoreHandle_t stateMutex;
 QueueHandle_t distanceQueue;
 TaskHandle_t mqttTaskHandle;
-
-
 
 void generateRandomIV() {
   DEBUG_PRINT("CRYPTO", "Generating new random IV");
@@ -98,21 +90,6 @@ void processingTask(void* pvParameters) {
                       lastState[data.sensorId] ? "OCCUPIED" : "VACANT",
                       lastDistance[data.sensorId]);
         
-        // Determine new state with hysteresis
-        if (data.distance < THRESHOLD_DISTANCE - HYSTERESIS) {
-          currentState = true;
-          DEBUG_PROCESS("Distance %.1f < threshold %d - hysteresis %d → OCCUPIED", 
-                       data.distance, THRESHOLD_DISTANCE, HYSTERESIS);
-        } else if (data.distance > THRESHOLD_DISTANCE + HYSTERESIS) {
-          currentState = false;
-          DEBUG_PROCESS("Distance %.1f > threshold %d + hysteresis %d → VACANT", 
-                       data.distance, THRESHOLD_DISTANCE, HYSTERESIS);
-        } else {
-          currentState = lastState[data.sensorId];
-          DEBUG_PROCESS("Distance %.1f in hysteresis range, maintaining state: %s", 
-                       data.distance, currentState ? "OCCUPIED" : "VACANT");
-        }
-
         lastDistance[data.sensorId] = data.distance;
 
         if (currentState != lastState[data.sensorId]) {
@@ -233,14 +210,6 @@ void mqttTask(void* pvParameters) {
 
 void setup() {
 
-  if (!firstBoot) {
-    for (int i = 0; i < NUM_SENSORS; i++) {
-      lastState[i] = preferences.getBool(String("state" + String(i)).c_str(), false);
-      DEBUG_PRINT("SYSTEM", "Loaded sensor %d state from NVS: %s", 
-                 i, lastState[i] ? "OCCUPIED" : "VACANT");
-    }
-  }
-
   if (firstBoot || !preferences.isKey("aes_iv")) {
     DEBUG_PRINT("SYSTEM", "First boot or missing IV, generating new one");
     generateRandomIV();
@@ -248,25 +217,6 @@ void setup() {
     preferences.getBytes("aes_iv", aes_iv, 16);
     DEBUG_PRINT("CRYPTO", "Loaded IV from preferences");
   }
-
-  DEBUG_PRINT("SYSTEM", "Initializing pins for %d sensors", NUM_SENSORS);
-  for (int i = 0; i < NUM_SENSORS; i++) {
-    pinMode(trigPins[i], OUTPUT);
-    pinMode(echoPins[i], INPUT);
-    digitalWrite(trigPins[i], LOW);
-    DEBUG_PRINT("SYSTEM", "Sensor %d: TRIG pin %d, ECHO pin %d", i, trigPins[i], echoPins[i]);
-  }
-
-  DEBUG_PRINT("SYSTEM", "Creating FreeRTOS objects");
-  stateMutex = xSemaphoreCreateMutex();
-  distanceQueue = xQueueCreate(NUM_SENSORS * 2, sizeof(SensorData));
-
-  if (!stateMutex || !distanceQueue) {
-    logError("Failed to create FreeRTOS objects");
-    while (1) { delay(1000); }
-  }
-
-  BaseType_t xReturned;
 
   DEBUG_PRINT("SYSTEM", "Creating tasks");
   xReturned = xTaskCreatePinnedToCore(sensorTask,"sensorTask",3072,NULL,1,NULL,0);
@@ -278,8 +228,4 @@ void setup() {
   xReturned = xTaskCreatePinnedToCore(,"mqttTask",8192,NULL,3,&mqttTaskHandle,1);
   if (xReturned != pdPASS) logError("Failed to create MQTT task");
 
-  xReturned = xTaskCreatePinnedToCore(sleepTask,"sleepTask",3072,NULL,0,NULL,0);
-  if (xReturned != pdPASS) logError("Failed to create sleep task");
-
-  DEBUG_PRINT("SYSTEM", "Setup complete, all tasks created successfully");
 }

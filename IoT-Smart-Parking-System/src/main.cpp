@@ -51,28 +51,28 @@ PubSubClient client(espClient);
 bool firstBoot = true;
 Preferences preferences;
 
+// ------ FreeRTOS variables -------------
+SemaphoreHandle_t stateMutex = NULL;
+TaskHandle_t mqttTaskHandle = NULL;
+QueueHandle_t distanceMeasurementsQueue = NULL;
+
+
 void setup() {
 
     // Initialize NVS
     preferences.begin("parking-sys", false);
     firstBoot = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER ? false : true;
-
     // Initialize serial communication
     Serial.begin(115200);               delay(300);
     displaySystemInfo();           
-
     // Initialize I2C communication
     Wire.begin(I2C_SDA, I2C_SCL);       delay(100);
-    
     // Initialize ultrasonic sensors
     initializeUltrasonicArray(usSensors, NUM_ULTRASONIC_SENSORS);
-
     // Initialize VL53L0X sensors
     initializeVL53LOXArray(tofSensors, NUM_VL53L0X_SENSORS);
-
     // Populate allSensors array
     int sensorCount = buildUnifiedSensorArray(usSensors, tofSensors, allSensors);
-
     // Initialize WiFi connection
     connectWiFi(lastSuccessfulConnection, connectionAttempts);
 
@@ -86,15 +86,19 @@ void setup() {
     } else {
         DEBUG("SYSTEM", "Not the first boot, loading previous state.");
         // Load sensor states from NVS
-        for (int i = 0; i < sensorCount; i++) {
+        for (int i = 0; i < sensorCount; i++)
            allSensors[i]->loadState(preferences);
-        }
     }
+    // Initialize FreeRTOS objects
+    stateMutex = xSemaphoreCreateMutex();
+    distanceMeasurementsQueue = xQueueCreate(sensorCount * 2, sizeof(float));
 
-    // Creation of FreeRTOS tasks
+    // Initialize FreeRTOS tasks
     BaseType_t xReturned;
 
-    // > Sleep Task
+    // ----- Sensor Task
+    
+    // ----- Sleep Task
     static SleepTaskParams sleepParams = {.prefs = &preferences, .sensors = allSensors, .sensorCount = sensorCount};
     xReturned = xTaskCreatePinnedToCore(sleepTask, "sleepTask", 4096, &sleepParams, 1, NULL, 0);
     if (xReturned != pdPASS) logError("Failed to create sleep task");
