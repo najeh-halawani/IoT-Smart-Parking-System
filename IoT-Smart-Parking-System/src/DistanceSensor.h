@@ -105,34 +105,3 @@ public:
     }
   }
 };
-
-struct SensorTaskParams {
-  int sensorCount;
-  int samplesPerReading;
-  DistanceSensor** sensors;
-};
-
-void sensorTask(void* pvParameters)  {
-  // Sensor task implementation
-  // This function will be called in a separate FreeRTOS task
-  // to handle sensor readings.
-  auto* params = static_cast<SensorTaskParams*>(pvParameters);
-  DistanceSensor** sensors = params->sensors;
-
-  TickType_t xLastWakeTime = xTaskGetTickCount();
-  DEBUG("SENSOR", "Sensor task started on core %d", xPortGetCoreID());
-
-  while(true) {
-    for (int i = 0; i < params->sensorCount; i++) {
-      DEBUG("SENSOR", "Reading sensor %d", sensors[i]->getId().c_str());
-      float distance = sensors[i]->getMedianDistance();
-
-      if (distance < 0) {
-        DEBUG("SENSOR", "Invalid reading from sensor %d", sensors[i]->getId().c_str());
-      } else {
-        DEBUG("SENSOR", "Sensor %d: Distance = %.1f cm", sensors[i]->getId().c_str(), distance);
-
-      }
-    }
-  }
-}

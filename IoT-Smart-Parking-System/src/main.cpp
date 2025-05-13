@@ -25,7 +25,9 @@
 #include "wifi_comms.h"
 #include "sensor_laser.h"
 #include "sensor_ultrasonic.h"
-#include "sleep.h"
+#include "deep_sleep.h"
+#include "system_task.h"
+#include "processing.h"
 #include "aes.h"
 
 /* Declaration of global variables */
@@ -52,10 +54,14 @@ bool firstBoot = true;
 Preferences preferences;
 
 // ------ FreeRTOS variables -------------
-SemaphoreHandle_t stateMutex = NULL;
-TaskHandle_t mqttTaskHandle = NULL;
-QueueHandle_t distanceMeasurementsQueue = NULL;
-
+// Handles
+TaskHandle_t systemTaskHandle;
+TaskHandle_t processingHandle;
+TaskHandle_t laserSensingHandle;
+TaskHandle_t ultrasonicSensingHandle;
+// Queues
+QueueHandle_t laserReadingQueue;
+QueueHandle_t ultrasonicReadingQueue;
 
 void setup() {
 
@@ -89,26 +95,39 @@ void setup() {
         for (int i = 0; i < sensorCount; i++)
            allSensors[i]->loadState(preferences);
     }
-    // Initialize FreeRTOS objects
-    stateMutex = xSemaphoreCreateMutex();
-    distanceMeasurementsQueue = xQueueCreate(sensorCount * 2, sizeof(float));
-
-    // Initialize FreeRTOS tasks
-    BaseType_t xReturned;
-
-    // ----- Sensor Task
     
-    // ----- Sleep Task
+    // Initialize FreeRTOS objects
+    laserReadingQueue = xQueueCreate(NUM_VL53L0X_SENSORS, sizeof(DistanceSensorReading));
+    ultrasonicReadingQueue = xQueueCreate(NUM_ULTRASONIC_SENSORS, sizeof(DistanceSensorReading));
+
+    // ---------- Initialization of FreeRTOS tasks -----------
+
+    // ----- Sensing Tasks: Ultrasonic (Core 1)
+    static SensorTaskParams usParams = {.sensors = reinterpret_cast<DistanceSensor**>(usSensors), .readingQueue = ultrasonicReadingQueue};
+    xTaskCreatePinnedToCore(usSensorTask, "usSensorTask", 4096, &usParams, 1, &ultrasonicSensingHandle, 1);
+    
+    // ----- Sensing Tasks: Laser (Core 1)
+    static SensorTaskParams tofParams = {.sensors = reinterpret_cast<DistanceSensor**>(tofSensors), .readingQueue = laserReadingQueue};
+    xTaskCreatePinnedToCore(laserTask, "laserTask", 4096, &tofParams, 1, &laserSensingHandle, 1);
+    
+    // ----- System Task (Core 0)
+    static SystemTaskParams sysParams = {.laserHandle = laserSensingHandle, .usHandle = ultrasonicSensingHandle};
+    xTaskCreatePinnedToCore(systemTask, "systemTask", 4096, &sysParams, 1, &systemTaskHandle, 0);
+
+    // ----- Processing Task (Core 0)
+    static ProcessingTaskParams processingParams = {.usQueue = ultrasonicReadingQueue, .tofQueue = laserReadingQueue, .systemTaskHandle = systemTaskHandle};
+    xTaskCreatePinnedToCore(processingTask, "processingTask", 4096, &processingParams, 1, &processingHandle, 0);
+
+    // ----- Deep Sleep Task (Core 0)
     static SleepTaskParams sleepParams = {.prefs = &preferences, .sensors = allSensors, .sensorCount = sensorCount};
-    xReturned = xTaskCreatePinnedToCore(sleepTask, "sleepTask", 4096, &sleepParams, 1, NULL, 0);
-    if (xReturned != pdPASS) logError("Failed to create sleep task");
+    xTaskCreatePinnedToCore(deepSleepTask, "sleepTask", 4096, &sleepParams, 1, NULL, 0);
 
     // Initialize Watchdog timer
     esp_task_wdt_init(WDT_TIMEOUT_S, true);
 }
 
 void loop() {
-    delay(2500);
-    testUltrasonicSensors(usSensors, NUM_ULTRASONIC_SENSORS);
+    // delay(2500);
+    // testUltrasonicSensors(usSensors, NUM_ULTRASONIC_SENSORS);
     // testVL53LOXSensors(tofSensors, NUM_VL53L0X_SENSORS);
 }

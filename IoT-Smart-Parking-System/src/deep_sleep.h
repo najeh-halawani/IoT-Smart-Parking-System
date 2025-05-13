@@ -60,17 +60,6 @@ void syncInternalRTC(unsigned long lastSuccessfulConnection, unsigned long conne
   }
 }
 
-/**
- * @brief Put the ESP32 into light sleep for a specified duration.
- * 
- * @param seconds Duration in seconds to sleep.
- */
-inline void lightSleepForSeconds(uint32_t seconds) {
-  esp_sleep_enable_timer_wakeup(seconds * 1000000ULL);
-  esp_light_sleep_start();
-}
-
-
 /* ----- FreeRTOS task function for sleep management ----- */
 // ----------------------------------------------------------
 
@@ -82,7 +71,7 @@ struct SleepTaskParams {
 };
 
 // FreeRTOS task function
-void sleepTask(void* pvParameters) {
+void deepSleepTask(void* pvParameters) {
   auto* params = static_cast<SleepTaskParams*>(pvParameters);
   Preferences& prefs = *params->prefs;
   DistanceSensor** sensors = params->sensors;
@@ -99,48 +88,54 @@ void sleepTask(void* pvParameters) {
     time_t now = time(nullptr);
     struct tm timeinfo;
     localtime_r(&now, &timeinfo);
-    int hour = timeinfo.tm_hour;
-    int minute = timeinfo.tm_min;
-    DEBUG("SLEEP", "Current time: %02d:%02d:%02d", hour, minute, timeinfo.tm_sec);
 
-    if (isTimeInRange(hour, minute)) {
-      struct tm wakeupTime = timeinfo;
-      wakeupTime.tm_hour = wakeHour;
-      wakeupTime.tm_min = wakeMinute;
-      wakeupTime.tm_sec = 0;
+    if (!isTimeInRange(timeinfo.tm_hour, timeinfo.tm_min)) {
+      // Not yet in deep sleep window — calculate time until it starts
+      struct tm sleepStartTime = timeinfo;
+      sleepStartTime.tm_hour = DEEP_SLEEP_START_HOUR;
+      sleepStartTime.tm_min = 0;
+      sleepStartTime.tm_sec = 0;
 
-      if (hour > wakeHour || (hour == wakeHour && minute >= wakeMinute)) {
-        wakeupTime.tm_mday += 1;
-        DEBUG("SLEEP", "Wake time already passed, scheduling for tomorrow");
+      // If we're past today's sleep start, schedule for tomorrow
+      if (mktime(&sleepStartTime) <= now) {
+        sleepStartTime.tm_mday += 1;
       }
 
-      int64_t sleepSec = mktime(&wakeupTime) - now;
-      DEBUG("SLEEP", "Sleep duration: %llds", sleepSec);
+      time_t target = mktime(&sleepStartTime);
+      int64_t waitSec = target - now;
 
-      if (sleepSec > 0 && sleepSec < 86400) {
-        
-        DEBUG("SLEEP", "Saving sensor states before deep sleep");
-
-        // Save sensor states
-        for (int i = 0; i < sensorCount; i++) {
-          sensors[i]->saveState(prefs);
-        }
-        prefs.end();
-
-        esp_sleep_enable_timer_wakeup(sleepSec * 1000000ULL);
-        DEBUG("SLEEP", "Entering deep sleep for %lld seconds until %02d:%02d", sleepSec, wakeHour, wakeMinute);
-        Serial.flush();
-        esp_deep_sleep_start();
-
-      } else {
-        DEBUG("ERROR", "Invalid sleep duration: %llds", sleepSec);
-      }
-    } else {
-      vTaskDelay(pdMS_TO_TICKS(LIGHT_SLEEP_TASK_RATE * 1000));
-      DEBUG("SLEEP", "Going to light sleep for %u seconds", LIGHT_SLEEP_DURATION);
-      Serial.flush();
-      lightSleepForSeconds(LIGHT_SLEEP_DURATION);
+      DEBUG("SLEEP", "Not in sleep window. Waiting %lld seconds until %02d:00", waitSec, DEEP_SLEEP_START_HOUR);
+      vTaskDelay(pdMS_TO_TICKS(waitSec * 1000));
+      continue;
     }
-    DEBUG("SLEEP", "Waking up from light sleep");
+
+    // Inside sleep range — calculate how long to sleep
+    struct tm wakeupTime = timeinfo;
+    wakeupTime.tm_hour = wakeHour;
+    wakeupTime.tm_min = wakeMinute;
+    wakeupTime.tm_sec = 0;
+
+    if (timeinfo.tm_hour > wakeHour || 
+       (timeinfo.tm_hour == wakeHour && timeinfo.tm_min >= wakeMinute)) {
+      wakeupTime.tm_mday += 1;  // schedule for tomorrow
+    }
+
+    int64_t sleepSec = mktime(&wakeupTime) - now;
+    DEBUG("SLEEP", "In sleep window. Will sleep for %lld seconds until %02d:%02d", sleepSec, wakeHour, wakeMinute);
+
+    if (sleepSec > 0 && sleepSec < 86400) {
+      for (int i = 0; i < sensorCount; i++) {
+        sensors[i]->saveState(prefs);
+      }
+      prefs.putBool("firstboot", false);
+      prefs.end();
+
+      esp_sleep_enable_timer_wakeup(sleepSec * 1000000ULL);
+      Serial.flush();
+      esp_deep_sleep_start();
+    } else {
+      DEBUG("SLEEP", "Invalid sleep duration, retrying in 60s");
+      vTaskDelay(pdMS_TO_TICKS(60000));
+    }
   }
 }
