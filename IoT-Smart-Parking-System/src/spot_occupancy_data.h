@@ -1,5 +1,4 @@
-#ifndef SPOT_OCCUPANCY_DATA_H
-#define SPOT_OCCUPANCY_DATA_H
+#pragma once
 
 struct SpotOccupancyData {
     int spotId;
@@ -7,5 +6,3 @@ struct SpotOccupancyData {
     float usDistance;
     float tofDistance;
 };
-
-#endif // SPOT_OCCUPANCY_DATA_H
