@@ -33,12 +33,11 @@
 #define DEEP_SLEEP_START_HOUR 0
 #define DEEP_SLEEP_END_HOUR 1
 #define DEEP_SLEEP_END_MINUTE 19
-#define LIGHT_SLEEP_DURATION 20 // in seconds
 #define NTP_OFFSET 7200 // in seconds
 // ---------------------------------------------------------
 
 // ------ General TASKS Configuration ----------------------
-#define MAIN_TASK_RATE 10 // in seconds, will be light sleep duration
+#define MAIN_TASK_RATE 5 // in seconds, will be light sleep duration
 
 // ------ AES Encryption Configuration ---------------------
 uint8_t aes_key[32] = {

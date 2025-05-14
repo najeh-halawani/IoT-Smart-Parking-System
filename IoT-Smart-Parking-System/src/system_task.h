@@ -68,7 +68,7 @@ void systemTask(void *pv) {
 
     DEBUG("SYSTEM", "Processing Done. Sleeping for %u seconds", LIGHT_SLEEP_DURATION);
     Serial.flush();
-    lightSleepForSeconds(LIGHT_SLEEP_DURATION);
+    lightSleepForSeconds(MAIN_TASK_RATE);
   }
 }
 
