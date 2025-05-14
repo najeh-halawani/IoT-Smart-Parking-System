@@ -15,7 +15,7 @@ public:
   float minValidRange() const override { return MIN_LASER_DISTANCE; }
   float maxValidRange() const override { return MAX_LASER_DISTANCE; }
 
-  void restart(uint8_t shutdownPin, uint8_t address) {
+  bool restart(uint8_t shutdownPin, uint8_t address) {
     // Reset the sensor:
     // 1. Set the XSHUT pin to LOW
     // 2. Set the XSHUT pin to HIGH
@@ -31,9 +31,11 @@ public:
     // 3.
     if (!sensor.begin(address)) {
       DEBUG("SYSTEM", "Failed to initialize VL53L0X at address 0x%02X", address);
-      while (1);
+      // while (1);
+      return false;
     }
     DEBUG("SYSTEM", "VL53L0X initialized at address 0x%02X", address);
+    return true;
   }
 
   float sampleOnce() override {
@@ -47,6 +49,28 @@ public:
     return "SENSOR-" + id;
   }
 
+  void PowerOn(uint8_t sensorIndex) {
+  if (sensorIndex >= NUM_VL53L0X_SENSORS) {
+    DEBUG("SYSTEM", "Invalid sensor index: %d", sensorIndex);
+    return;
+  }
+  uint8_t shutdownPin = loxShutdownPins[sensorIndex];
+  restart(shutdownPin, loxAddresses[sensorIndex]);
+  DEBUG("SYSTEM", "Sensor %d powered on", sensorIndex);
+}
+
+void PowerOff(uint8_t sensorIndex) {
+  if (sensorIndex >= NUM_VL53L0X_SENSORS) {
+    DEBUG("SYSTEM", "Invalid sensor index: %d", sensorIndex);
+    return;
+  }
+  uint8_t shutdownPin = loxShutdownPins[sensorIndex];
+  pinMode(shutdownPin, OUTPUT);
+  digitalWrite(shutdownPin, LOW);
+  delay(10);
+  DEBUG("SYSTEM", "Sensor %d powered off", sensorIndex);
+}
+
 };
 
 void initializeVL53LOXArray(TimeOfFlightSensor** sensors, int count) {
@@ -55,7 +79,10 @@ void initializeVL53LOXArray(TimeOfFlightSensor** sensors, int count) {
     const uint8_t address = loxAddresses[i];
     const uint8_t shutdownPin = loxShutdownPins[i];
     sensors[i] = new TimeOfFlightSensor("TOF-"+String(i));
-    sensors[i]->restart(shutdownPin, address);
+    if (!sensors[i]->restart(shutdownPin, address)){
+        DEBUG("SYSTEM", "Sensor %d failed to initialize", i);
+        continue;
+    }
   }
   DEBUG("SYSTEM", "VL53L0X sensors initialized");
 }
@@ -65,3 +92,4 @@ void testVL53LOXSensors(TimeOfFlightSensor** sensors, int count) {
     sensors[i]->test();
   }
 }
+
