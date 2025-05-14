@@ -75,7 +75,7 @@ void setup() {
     WiFi.setSleep(true);
     // Initialize MQTT
     client.setServer(MQTT_SERVER, MQTT_PORT);
-    client.setKeepAlive(30); // Set MQTT keep-alive to 30 seconds to avoid disconnection in light sleep
+    client.setKeepAlive(MAIN_TASK_RATE*1.5); // Set MQTT keep-alive to 30 seconds to avoid disconnection in light sleep
     connectMQTT(client, espClient, MQTT_SERVER, MQTT_PORT, MQTT_CLIENT_ID);
 
     // Check if it's the first boot. If so, initialize the system.

@@ -29,6 +29,7 @@
 #include "debug.h"
 #include "aes.h"
 #include "spot_occupancy_data.h"
+#include "esp_wifi.h"
 
 // extern WiFiClientSecure espClient;
 extern WiFiClient espClient;
@@ -53,6 +54,7 @@ void connectWiFi(unsigned long lastSuccessfulConnection, unsigned long connectio
   if (WiFi.status() == WL_CONNECTED)
   {
     DEBUG("WIFI", "Connected with IP: %s (RSSI: %d dBm)", WiFi.localIP().toString().c_str(), WiFi.RSSI());
+    esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
     lastSuccessfulConnection = millis();
     connectionAttempts = 0;
   }

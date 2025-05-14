@@ -66,9 +66,9 @@ void systemTask(void *pv) {
     // Wait for processing task to finish
     ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-    DEBUG("SYSTEM", "Processing Done. Sleeping for %u seconds", LIGHT_SLEEP_DURATION);
+    DEBUG("SYSTEM", "Processing Done. Sleeping for %u seconds", MAIN_TASK_RATE);
     Serial.flush();
-    lightSleepForSeconds(LIGHT_SLEEP_DURATION);
+    lightSleepForSeconds(MAIN_TASK_RATE);
   }
 }
 

@@ -13,8 +13,8 @@
 // --------------------------------------------------------
 
 // ------ WiFi Configuration ------------------------------
-#define WIFI_SSID "whitex"
-#define WIFI_PASSWORD "whitewhite"
+#define WIFI_SSID "FRITZ!Box 7530 LP"
+#define WIFI_PASSWORD "70403295595551907386"
 // --------------------------------------------------------
 
 // ------ MQTT Configuration ------------------------------
@@ -33,12 +33,11 @@
 #define DEEP_SLEEP_START_HOUR 0
 #define DEEP_SLEEP_END_HOUR 1
 #define DEEP_SLEEP_END_MINUTE 19
-#define LIGHT_SLEEP_DURATION 20 // in seconds
 #define NTP_OFFSET 7200 // in seconds
 // ---------------------------------------------------------
 
 // ------ General TASKS Configuration ----------------------
-#define MAIN_TASK_RATE 10 // in seconds, will be light sleep duration
+#define MAIN_TASK_RATE 20 // in seconds, will be light sleep duration
 
 // ------ AES Encryption Configuration ---------------------
 uint8_t aes_key[32] = {
@@ -51,7 +50,7 @@ uint8_t aes_key[32] = {
 
 // ------ General Distance Sensor Configuration -------------
 #define HYSTERESIS 5
-#define NUM_SPOTS 1
+#define NUM_SPOTS 2
 // ----------------------------------------------------------
 
 // ------ VL53L0X Time-Of-Flight Sensor Configuration -------
@@ -60,8 +59,8 @@ uint8_t aes_key[32] = {
 #define LASER_THRESHOLD_DISTANCE 50
 #define MIN_LASER_DISTANCE 2
 #define MAX_LASER_DISTANCE 100000
-const uint8_t loxAddresses[NUM_VL53L0X_SENSORS] = { 0x30 };
-const uint8_t loxShutdownPins[NUM_VL53L0X_SENSORS] = { 48 };
+const uint8_t loxAddresses[NUM_VL53L0X_SENSORS] = { 0x30, 0x31 };
+const uint8_t loxShutdownPins[NUM_VL53L0X_SENSORS] = { 48, 47 };
 // ----------------------------------------------------------
 
 // ------ Ultrasonic Sensor Configuration -------------------
@@ -70,7 +69,7 @@ const uint8_t loxShutdownPins[NUM_VL53L0X_SENSORS] = { 48 };
 #define ULTRASONIC_THRESHOLD_DISTANCE 50
 #define MIN_ULTRASONIC_DISTANCE 2
 #define MAX_ULTRASONIC_DISTANCE 400
-const int trigPins[NUM_ULTRASONIC_SENSORS] = { 19 };
-const int echoPins[NUM_ULTRASONIC_SENSORS] = { 20 };
+const int trigPins[NUM_ULTRASONIC_SENSORS] = { 19, 33 };
+const int echoPins[NUM_ULTRASONIC_SENSORS] = { 20, 34 };
 // ----------------------------------------------------------
 
