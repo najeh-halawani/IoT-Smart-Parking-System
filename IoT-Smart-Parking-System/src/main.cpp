@@ -71,6 +71,12 @@ void setup() {
     int sensorCount = buildUnifiedSensorArray(usSensors, tofSensors, allSensors);
     // Initialize WiFi connection
     connectWiFi(lastSuccessfulConnection, connectionAttempts);
+    // Enable WiFi modem sleep
+    WiFi.setSleep(true);
+    // Initialize MQTT
+    client.setServer(MQTT_SERVER, MQTT_PORT);
+    client.setKeepAlive(30); // Set MQTT keep-alive to 30 seconds to avoid disconnection in light sleep
+    connectMQTT(client, espClient, MQTT_SERVER, MQTT_PORT, MQTT_CLIENT_ID);
 
     // Check if it's the first boot. If so, initialize the system.
     if (firstBoot) {
