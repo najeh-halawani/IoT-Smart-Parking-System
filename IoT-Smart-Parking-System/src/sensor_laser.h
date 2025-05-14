@@ -7,15 +7,20 @@
 class TimeOfFlightSensor : public DistanceSensor {
   Adafruit_VL53L0X sensor;
   VL53L0X_RangingMeasurementData_t measure;
+  uint8_t shutdownPin;
+  uint8_t address;
 
 public:
-  TimeOfFlightSensor(const String& id)
-  : DistanceSensor(id, LASER_SAMPLES, LASER_THRESHOLD_DISTANCE) {}
+  TimeOfFlightSensor(const String& id, uint8_t shutdownPin, uint8_t address)
+    : DistanceSensor(id, LASER_SAMPLES, LASER_THRESHOLD_DISTANCE) {
+    this->shutdownPin = shutdownPin;
+    this->address = address;
+  }
 
   float minValidRange() const override { return MIN_LASER_DISTANCE; }
   float maxValidRange() const override { return MAX_LASER_DISTANCE; }
 
-  bool restart(uint8_t shutdownPin, uint8_t address) {
+  bool restart() {
     // Reset the sensor:
     // 1. Set the XSHUT pin to LOW
     // 2. Set the XSHUT pin to HIGH
@@ -49,27 +54,18 @@ public:
     return "SENSOR-" + id;
   }
 
-  void PowerOn(uint8_t sensorIndex) {
-  if (sensorIndex >= NUM_VL53L0X_SENSORS) {
-    DEBUG("SYSTEM", "Invalid sensor index: %d", sensorIndex);
-    return;
+  void powerOn() override {
+    restart();
+    delay(10);
+    DEBUG("SYSTEM", "Sensor %s powered on", id.c_str());
   }
-  uint8_t shutdownPin = loxShutdownPins[sensorIndex];
-  restart(shutdownPin, loxAddresses[sensorIndex]);
-  DEBUG("SYSTEM", "Sensor %d powered on", sensorIndex);
-}
 
-void PowerOff(uint8_t sensorIndex) {
-  if (sensorIndex >= NUM_VL53L0X_SENSORS) {
-    DEBUG("SYSTEM", "Invalid sensor index: %d", sensorIndex);
-    return;
+  void powerOff() override {
+    pinMode(shutdownPin, OUTPUT);
+    digitalWrite(shutdownPin, LOW);
+    delay(10);
+    DEBUG("SYSTEM", "Sensor %s powered off", id.c_str());
   }
-  uint8_t shutdownPin = loxShutdownPins[sensorIndex];
-  pinMode(shutdownPin, OUTPUT);
-  digitalWrite(shutdownPin, LOW);
-  delay(10);
-  DEBUG("SYSTEM", "Sensor %d powered off", sensorIndex);
-}
 
 };
 
@@ -78,11 +74,7 @@ void initializeVL53LOXArray(TimeOfFlightSensor** sensors, int count) {
   for (int i = 0; i < count; i++) {
     const uint8_t address = loxAddresses[i];
     const uint8_t shutdownPin = loxShutdownPins[i];
-    sensors[i] = new TimeOfFlightSensor("TOF-"+String(i));
-    if (!sensors[i]->restart(shutdownPin, address)){
-        DEBUG("SYSTEM", "Sensor %d failed to initialize", i);
-        continue;
-    }
+    sensors[i] = new TimeOfFlightSensor("TOF-"+String(i), shutdownPin, address);
   }
   DEBUG("SYSTEM", "VL53L0X sensors initialized");
 }

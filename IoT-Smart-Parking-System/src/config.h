@@ -37,7 +37,7 @@
 // ---------------------------------------------------------
 
 // ------ General TASKS Configuration ----------------------
-#define MAIN_TASK_RATE 20 // in seconds, will be light sleep duration
+#define MAIN_TASK_RATE 30 // in seconds, will be deep sleep duration
 
 // ------ AES Encryption Configuration ---------------------
 uint8_t aes_key[32] = {

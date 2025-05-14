@@ -14,6 +14,8 @@ public:
 
   virtual ~DistanceSensor() {}
   virtual String debugTag() const = 0;  
+  virtual void powerOn() {}   // default: do nothing
+  virtual void powerOff() {}  // default: do nothing
 
   bool updateState(float distance) {
     bool vacant;
@@ -33,11 +35,13 @@ protected:
 
 public:
   float getMedianDistance() {
+    
     float readings[nSamples];
     int validReadings = 0;
 
     DEBUG(debugTag().c_str(), "Reading %d samples", nSamples);
-
+    
+    powerOn();
     for (int i = 0; i < nSamples; i++) {
       float distance = sampleOnce();
 
@@ -50,6 +54,7 @@ public:
       DEBUG(debugTag().c_str(), "Reading %d: %.1f cm", i, distance);
       delay(50);
     }
+    powerOff();
 
     if (validReadings == 0) {
       DEBUG(debugTag().c_str(), "No valid readings");
