@@ -13,12 +13,13 @@
 // --------------------------------------------------------
 
 // ------ WiFi Configuration ------------------------------
-#define WIFI_SSID "FRITZ!Box 7530 LP"
-#define WIFI_PASSWORD "70403295595551907386"
+#define WIFI_SSID "Najeh's S25 Ultra"
+#define WIFI_PASSWORD "white1xx"
 // --------------------------------------------------------
 
 // ------ MQTT Configuration ------------------------------
-#define MQTT_SERVER "broker.hivemq.com"
+// #define MQTT_SERVER "broker.hivemq.com"
+#define MQTT_SERVER "test.mosquitto.org"
 #define MQTT_PORT 1883
 #define MQTT_TOPIC "SmartParkingSystem"
 #define MQTT_CLIENT_ID "ESP32_Parking_Sensor"
@@ -37,6 +38,7 @@
 // ---------------------------------------------------------
 
 // ------ General TASKS Configuration ----------------------
+// #define MAIN_TASK_RATE 30 // in seconds, will be deep sleep duration
 #define MAIN_TASK_RATE 30 // in seconds, will be deep sleep duration
 
 // ------ AES Encryption Configuration ---------------------
@@ -51,6 +53,17 @@ uint8_t aes_key[32] = {
 // ------ General Distance Sensor Configuration -------------
 #define HYSTERESIS 5
 #define NUM_SPOTS 2
+
+#define NUM_SPOTS 2 // Number of parking spots
+#define OCCUPANCY_THRESHOLD 50.0 // cm, distance below which spot is considered occupied
+#define SAMPLING_RATE_UNOCCUPIED 5000 // ms, sampling interval when unoccupied
+#define SAMPLING_RATE_OCCUPIED 30000 // ms, sampling interval when occupied
+#define ULTRASONIC_WEIGHT 0.4 // Weight for ultrasonic sensor in fusion
+#define TOF_WEIGHT 0.6 // Weight for ToF sensor in fusion
+#define MAX_DISTANCE 400.0 // cm, maximum valid sensor distance
+#define CONSISTENCY_THRESHOLD 0.2 // 20% max difference between sensor readings
+#define DATA_FRESHNESS_TIMEOUT 5000 // ms, max age of sensor data
+#define SINGLE_SENSOR_THRESHOLD 60.0 
 // ----------------------------------------------------------
 
 // ------ VL53L0X Time-Of-Flight Sensor Configuration -------
@@ -58,7 +71,7 @@ uint8_t aes_key[32] = {
 #define LASER_SAMPLES 5
 #define LASER_THRESHOLD_DISTANCE 50
 #define MIN_LASER_DISTANCE 2
-#define MAX_LASER_DISTANCE 100000
+#define MAX_LASER_DISTANCE 100000000
 const uint8_t loxAddresses[NUM_VL53L0X_SENSORS] = { 0x30, 0x31 };
 const uint8_t loxShutdownPins[NUM_VL53L0X_SENSORS] = { 48, 47 };
 // ----------------------------------------------------------
@@ -78,11 +91,11 @@ const int echoPins[NUM_ULTRASONIC_SENSORS] = { 20, 34 };
 const char* LORAWAN_BAND = "EU868"; // Adjust for your region (e.g., US915, AS923)
 const uint8_t LORAWAN_SUBBAND = 0;  // Set to 0 if no sub-band
 const uint8_t LORAWAN_PORT = 1;
-const uint64_t LORAWAN_JOINEUI = 0x0000000000000000; // Replace with your JoinEUI
-const uint64_t LORAWAN_DEVEUI = 0x123456789ABCDEF0;  // Replace with your DevEUI
+const uint64_t LORAWAN_JOINEUI = 0x0000000000000000; 
+const uint64_t LORAWAN_DEVEUI = 0x123456789ABCDEF0;  
 const uint8_t LORAWAN_APPKEY[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                                    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}; // Replace with your AppKey
+                                    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}; 
 const uint8_t LORAWAN_NWKKEY[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                                    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}; // Replace with your NwkKey
+                                    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}; 
 #define MINIMUM_DELAY 900 // Minimum delay in seconds (per TTN Fair Use Policy)
 #define DUTY_CYCLE_MS 1250 // Duty cycle interval in ms

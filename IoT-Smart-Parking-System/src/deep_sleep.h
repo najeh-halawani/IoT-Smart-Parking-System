@@ -122,7 +122,7 @@ void deepSleepTask(void* pvParameters) {
             uint32_t interval = node->timeUntilUplink();
             uint32_t delayMs = max(interval, (uint32_t)MINIMUM_DELAY * 1000);
             uint64_t sleepUs = min((int64_t)delayMs * 1000, (int64_t)sleepSec * 1000000);
-            DEBUG("SLEEP", "Next TX in %u s, sleeping for %llu us", delayMs / 1000, sleepUs);
+            // DEBUG("SLEEP", "Next TX in %u s, sleeping for %llu us", delayMs / 1000, sleepUs);
 
             // Power down WiFi and other peripherals
             WiFi.disconnect(true);

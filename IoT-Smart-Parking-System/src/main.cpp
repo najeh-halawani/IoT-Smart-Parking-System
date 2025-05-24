@@ -165,8 +165,8 @@ void setup()
     static SleepTaskParams sleepParams = {.prefs = &preferences, .sensors = allSensors, .sensorCount = sensorCount, .loraNode = node};
     xTaskCreatePinnedToCore(deepSleepTask, "sleepTask", 4096, &sleepParams, 1, NULL, 0);
 
-    static LoRaTaskParams loraParams = {.loraNode = node, .loraDataQueue = loraDataQueue};
-    xTaskCreatePinnedToCore(loraTask, "LoRaTask", 8192, &loraParams, 1, &loraTaskHandle, 1);
+    // static LoRaTaskParams loraParams = {.loraNode = node, .loraDataQueue = loraDataQueue};
+    // xTaskCreatePinnedToCore(loraTask, "LoRaTask", 8192, &loraParams, 1, &loraTaskHandle, 1);
 
     xTaskCreatePinnedToCore(wifiMQTTTask, "WiFiMQTT Task", 8192, &mqttDataQueue, 1, &wifiMQTTHandle, 1);
 

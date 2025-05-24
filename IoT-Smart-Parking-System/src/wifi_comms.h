@@ -48,6 +48,7 @@ void connectWiFi(unsigned long lastSuccessfulConnection, unsigned long connectio
   {
     delay(500);
     Serial.print(".");
+    Serial.println(WiFi.status());
     attempts++;
   }
 
