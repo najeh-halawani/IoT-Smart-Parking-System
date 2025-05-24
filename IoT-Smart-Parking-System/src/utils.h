@@ -43,6 +43,19 @@ void displaySystemInfo() {
     #endif
 }
 
+
+/**
+ * @brief Convert hex string to binary
+ * 
+ * @param hex, bin, binLen
+ */
+void hex2bin(const char* hex, uint8_t* bin, size_t binLen) {
+    for (size_t i = 0; i < binLen; i++) {
+        char hexByte[3] = { hex[i*2], hex[i*2+1], '\0' };
+        bin[i] = (uint8_t)strtol(hexByte, NULL, 16);
+    }
+}
+
 /**
  * @brief Logs an error message to the serial monitor.
  * 

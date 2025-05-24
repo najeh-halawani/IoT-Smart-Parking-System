@@ -5,4 +5,5 @@ struct SpotOccupancyData {
     bool occupied;
     float usDistance;
     float tofDistance;
+    time_t timestamp;
 };

@@ -73,3 +73,16 @@ const int trigPins[NUM_ULTRASONIC_SENSORS] = { 19, 33 };
 const int echoPins[NUM_ULTRASONIC_SENSORS] = { 20, 34 };
 // ----------------------------------------------------------
 
+// LoRaWAN configurations
+#define RADIO_BOARD_WIFI_LORA32_V3 
+const char* LORAWAN_BAND = "EU868"; // Adjust for your region (e.g., US915, AS923)
+const uint8_t LORAWAN_SUBBAND = 0;  // Set to 0 if no sub-band
+const uint8_t LORAWAN_PORT = 1;
+const uint64_t LORAWAN_JOINEUI = 0x0000000000000000; // Replace with your JoinEUI
+const uint64_t LORAWAN_DEVEUI = 0x123456789ABCDEF0;  // Replace with your DevEUI
+const uint8_t LORAWAN_APPKEY[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                                    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}; // Replace with your AppKey
+const uint8_t LORAWAN_NWKKEY[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+                                    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}; // Replace with your NwkKey
+#define MINIMUM_DELAY 900 // Minimum delay in seconds (per TTN Fair Use Policy)
+#define DUTY_CYCLE_MS 1250 // Duty cycle interval in ms
