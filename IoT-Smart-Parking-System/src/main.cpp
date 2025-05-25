@@ -26,7 +26,6 @@
 Radio radio = new RadioModule();
 LoRaWANNode *node;
 
-
 // Ultrasonic sensor instances
 UltrasonicSensor *usSensors[NUM_ULTRASONIC_SENSORS];
 
@@ -67,7 +66,11 @@ void setup()
     // Initialize NVS
     preferences.begin("parking-sys", false);
     firstBoot = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER ? false : true;
-
+    if (firstBoot)
+    {
+        preferences.putBool("firstboot", true);
+    }
+    preferences.end();
     // Initialize serial communication
     Serial.begin(115200);
     delay(300);
@@ -87,19 +90,19 @@ void setup()
     int sensorCount = buildUnifiedSensorArray(usSensors, tofSensors, allSensors);
 
     // Initialize WiFi connection
-    connectWiFi(lastSuccessfulConnection, connectionAttempts);
+    // connectWiFi(lastSuccessfulConnection, connectionAttempts);
     WiFi.setSleep(true);
 
     // Initialize MQTT
     client.setServer(MQTT_SERVER, MQTT_PORT);
     client.setKeepAlive(MAIN_TASK_RATE * 1.5);
-    connectMQTT(client, espClient, MQTT_SERVER, MQTT_PORT, MQTT_CLIENT_ID);
+    // connectMQTT(client, espClient, MQTT_SERVER, MQTT_PORT, MQTT_CLIENT_ID);
 
     // Initialize radio
     int16_t state = radio.begin();
     if (state != RADIOLIB_ERR_NONE)
     {
-        DEBUG("LORAWAN", "Radio initialization failed with error %d. Entering deep sleep.", state);
+        DEBUG("LORAWAN", "Radio initialization failed with error %d.", state);
         // goToDeepSleep(sensorCount); // Enter deep sleep on failure
     }
 
@@ -152,17 +155,28 @@ void setup()
     static SensorTaskParams tofParams = {.sensors = reinterpret_cast<DistanceSensor **>(tofSensors), .readingQueue = laserReadingQueue};
     xTaskCreatePinnedToCore(laserTask, "laserTask", 4096, &tofParams, 1, &laserSensingHandle, 1);
 
-    static SystemTaskParams sysParams = {.laserHandle = laserSensingHandle, .usHandle = ultrasonicSensingHandle};
+    static SystemTaskParams sysParams = {
+        .laserHandle = laserSensingHandle,
+        .usHandle = ultrasonicSensingHandle,
+        .usSensors = reinterpret_cast<DistanceSensor **>(usSensors),
+        .tofSensors = reinterpret_cast<DistanceSensor **>(tofSensors),
+        .prefs = &preferences};
     xTaskCreatePinnedToCore(systemTask, "systemTask", 4096, &sysParams, 1, &systemTaskHandle, 0);
 
     static ProcessingTaskParams processingParams = {
         .usQueue = ultrasonicReadingQueue,
         .tofQueue = laserReadingQueue,
         .mqttDataQueue = mqttDataQueue,
-        .systemTaskHandle = systemTaskHandle};
+        .loraDataQueue = loraDataQueue,
+        .systemTaskHandle = systemTaskHandle,
+        .prefs = &preferences};
     xTaskCreatePinnedToCore(processingTask, "processingTask", 4096, &processingParams, 1, &processingHandle, 0);
 
-    static SleepTaskParams sleepParams = {.prefs = &preferences, .sensors = allSensors, .sensorCount = sensorCount, .loraNode = node};
+    static SleepTaskParams sleepParams = {
+        .prefs = &preferences,
+        .sensors = allSensors,
+        .sensorCount = sensorCount,
+        .loraNode = node};
     xTaskCreatePinnedToCore(deepSleepTask, "sleepTask", 4096, &sleepParams, 1, NULL, 0);
 
     // static LoRaTaskParams loraParams = {.loraNode = node, .loraDataQueue = loraDataQueue};
@@ -177,21 +191,3 @@ void setup()
 void loop()
 {
 }
-
-// void goToDeepSleep(int sensorCount)
-// {
-//     DEBUG("SLEEP", "Entering deep sleep due to error.");
-//     for (int i = 0; i < sensorCount; i++)
-//     {
-//         allSensors[i]->saveState(preferences);
-//     }
-//     preferences.putBool("firstboot", false);
-//     persist.saveSession(node);
-//     uint32_t delayMs = max(node->timeUntilUplink(), (uint32_t)MINIMUM_DELAY * 1000);
-//     DEBUG("SLEEP", "Sleeping for %u s", delayMs / 1000);
-//     WiFi.disconnect(true);
-//     delay(100);
-//     esp_sleep_enable_timer_wakeup((int64_t)delayMs * 1000);
-//     Serial.flush();
-//     esp_deep_sleep_start();
-// }

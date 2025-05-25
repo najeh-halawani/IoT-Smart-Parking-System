@@ -19,6 +19,7 @@ inline void lightSleepForSeconds(uint32_t seconds) {
 /* 
 * Struct to hold distance sensor readings for FreeRTOS tasks
 */
+extern RTC_DATA_ATTR uint32_t lastSampleTime[NUM_SPOTS];
 
 struct DistanceSensorReading {
   int sensorId;
@@ -43,34 +44,101 @@ struct SensorTaskParams {
 */
 
 struct SystemTaskParams {
-  TaskHandle_t laserHandle;
-  TaskHandle_t usHandle;
+    TaskHandle_t laserHandle;
+    TaskHandle_t usHandle;
+    DistanceSensor** usSensors;
+    DistanceSensor** tofSensors;
+    Preferences* prefs; // Added for firstBoot
 };
 
+
+// Place this at global scope, before any function definitions
+// RTC_DATA_ATTR uint32_t lastSampleTime[NUM_SPOTS];
+
 void systemTask(void *pv) {
-  auto * params = static_cast<SystemTaskParams*>(pv);
-  TaskHandle_t laserSensingHandle = params->laserHandle;
-  TaskHandle_t ultrasonicSensingHandle = params->usHandle;
+    auto *params = static_cast<SystemTaskParams*>(pv);
+    TaskHandle_t laserSensingHandle = params->laserHandle;
+    TaskHandle_t ultrasonicSensingHandle = params->usHandle;
+    DistanceSensor** usSensors = params->usSensors;
+    DistanceSensor** tofSensors = params->tofSensors;
+    Preferences& prefs = *params->prefs;
 
-  TickType_t lastWake = xTaskGetTickCount();
+    const uint32_t VACANT_SAMPLE_INTERVAL = 120000;
+    const uint32_t OCCUPIED_SAMPLE_INTERVAL = 300000;
 
-  while (1) {
-    vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(2000));
+    TickType_t lastWake = xTaskGetTickCount();
 
-    DEBUG("SYSTEM", "Triggering sensor sampling...");
+    while (1) {
+        uint32_t currentTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
-    // Notify both tasks to start sampling
-    xTaskNotifyGive(ultrasonicSensingHandle);
-    xTaskNotifyGive(laserSensingHandle);
-    
-    // Wait for processing task to finish
-    ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        // Load occupancy states and firstBoot
+        bool lastOccupied[NUM_SPOTS];
+        prefs.begin("parking-sys", true);
+        for (int i = 0; i < NUM_SPOTS; i++) {
+            String key = String("spot") + i + "_occupied";
+            lastOccupied[i] = prefs.getBool(key.c_str(), false);
+        }
+        bool firstBoot = prefs.getBool("firstboot", true);
+        prefs.end();
 
-    DEBUG("SYSTEM", "Processing Done. Sleeping for %u seconds", MAIN_TASK_RATE);
-    Serial.flush();
-    lightSleepForSeconds(MAIN_TASK_RATE);
-  }
+        // Check if in 12 AM to 8 AM sleep window
+        time_t now = time(nullptr);
+        struct tm timeinfo;
+        localtime_r(&now, &timeinfo);
+        if (isTimeInRange(timeinfo.tm_hour, timeinfo.tm_min)) {
+            vTaskDelay(pdMS_TO_TICKS(1000)); // Let deepSleepTask handle
+            continue;
+        }
+
+        // Determine which spots need sampling
+        bool shouldSample[NUM_SPOTS] = {false};
+        uint32_t minSleepTime = UINT32_MAX;
+        for (int i = 0; i < NUM_SPOTS; i++) {
+            uint32_t sampleInterval = lastOccupied[i] ? OCCUPIED_SAMPLE_INTERVAL : VACANT_SAMPLE_INTERVAL;
+            if (firstBoot || (currentTime - lastSampleTime[i] >= sampleInterval)) {
+                shouldSample[i] = true;
+                // usSensors[i]->powerOn();
+                // tofSensors[i]->powerOn();
+            }
+            uint32_t timeSinceLastSample = currentTime - lastSampleTime[i];
+            uint32_t timeUntilNextSample = (timeSinceLastSample >= sampleInterval) ? 0 : (sampleInterval - timeSinceLastSample);
+            minSleepTime = min(minSleepTime, timeUntilNextSample);
+        }
+
+        // Trigger sampling for due spots
+        for (int i = 0; i < NUM_SPOTS; i++) {
+            if (shouldSample[i]) {
+                DEBUG("SYSTEM", "Triggering sampling for spot %d", i);
+                xTaskNotifyGive(ultrasonicSensingHandle);
+                xTaskNotifyGive(laserSensingHandle);
+                // Wait for processing task to finish
+                ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
+                // usSensors[i]->powerOff();
+                // tofSensors[i]->powerOff();
+            }
+        }
+
+        // Clear firstBoot after initial sampling
+        if (firstBoot && shouldSample[0] && shouldSample[1]) {
+            prefs.begin("parking-sys", false);
+            prefs.putBool("firstboot", false);
+            prefs.end();
+        }
+
+        // Enter deep sleep if outside 12 AM to 8 AM window
+        if (minSleepTime > 1000) {
+            DEBUG("SYSTEM", "Entering deep sleep for %lu ms", minSleepTime);
+            WiFi.disconnect(true);
+            delay(100);
+            Serial.flush();
+            esp_sleep_enable_timer_wakeup(minSleepTime * 1000);
+            esp_deep_sleep_start();
+        }
+
+        vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(2000));
+    }
 }
+
 
 
 /* 

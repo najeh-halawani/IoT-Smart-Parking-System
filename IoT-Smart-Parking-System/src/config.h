@@ -39,7 +39,7 @@
 
 // ------ General TASKS Configuration ----------------------
 // #define MAIN_TASK_RATE 30 // in seconds, will be deep sleep duration
-#define MAIN_TASK_RATE 30 // in seconds, will be deep sleep duration
+#define MAIN_TASK_RATE 120 // in seconds, will be deep sleep duration
 
 // ------ AES Encryption Configuration ---------------------
 uint8_t aes_key[32] = {
@@ -55,7 +55,7 @@ uint8_t aes_key[32] = {
 #define NUM_SPOTS 2
 
 #define NUM_SPOTS 2 // Number of parking spots
-#define OCCUPANCY_THRESHOLD 50.0 // cm, distance below which spot is considered occupied
+#define OCCUPANCY_THRESHOLD 50.0 // [cm, distance below which spot is considered occupied
 #define SAMPLING_RATE_UNOCCUPIED 5000 // ms, sampling interval when unoccupied
 #define SAMPLING_RATE_OCCUPIED 30000 // ms, sampling interval when occupied
 #define ULTRASONIC_WEIGHT 0.4 // Weight for ultrasonic sensor in fusion
