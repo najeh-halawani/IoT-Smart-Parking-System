@@ -1,143 +1,150 @@
-#pragma once
-#include <LoRaWAN_ESP32.h>
-#include <ArduinoJson.h>
-#include <time.h>
-#include "config.h"
-#include "debug.h"
-#include "spot_occupancy_data.h"
-#include "aes.h"
+// #pragma once
+// #include <Arduino.h>
+// #include <heltec.h>
+// #include "LoRaWan_APP.h"
+// #include <ArduinoJson.h>
+// #include "config.h"
+// #include "debug.h"
+// #include "spot_occupancy_data.h"
+// #include "aes.h"
 
-struct LoRaTaskParams
-{
-    LoRaWANNode *loraNode;
-    QueueHandle_t loraDataQueue;
-};
+// // LoRaWAN Parameters
+// extern uint32_t license[4];
+// extern uint8_t devEui[];
+// extern uint8_t appEui[];
+// extern uint8_t appKey[];
+// extern uint8_t nwkSKey[];
+// extern uint8_t appSKey[];
+// extern uint32_t devAddr;
+// extern uint16_t userChannelsMask[6];
+// extern LoRaMacRegion_t loraWanRegion;
+// extern DeviceClass_t loraWanClass;
+// extern bool overTheAirActivation;
+// extern bool loraWanAdr;
+// extern bool isTxConfirmed;
+// extern uint8_t appPort;
+// extern uint8_t confirmedNbTrials;
+// extern uint32_t appTxDutyCycle;
 
-void loraTask(void *pv)
-{
-    auto *params = static_cast<LoRaTaskParams *>(pv);
-    LoRaWANNode *node = params->loraNode;
-    QueueHandle_t loraDataQueue = params->loraDataQueue;
-    SpotOccupancyData data;
+// struct LoRaTaskParams {
+//     QueueHandle_t loraDataQueue;
+// };
 
-    AES256 aes(aes_key);
+// // Prepare LoRaWAN frame with encrypted data
+// static void prepareTxFrame(uint8_t port, SpotOccupancyData* data, AES256* aes) {
+//     // Create JSON document for data
+//     StaticJsonDocument<256> doc;
+//     doc["id"] = data->spotId;
+//     doc["occ"] = data->occupied;
+//     doc["us"] = data->usDistance;
+//     doc["tof"] = data->tofDistance;
+//     doc["ts"] = (uint32_t)time(nullptr);
 
-    while (true)
-    {
-        // Check if node is activated
-        if (!node->isActivated())
-        {
-            DEBUG("LORAWAN", "Not activated, attempting OTAA join");
-            int16_t state = node->activateOTAA();
-            if (state == RADIOLIB_LORAWAN_SESSION_RESTORED)
-            {
-                DEBUG("LORAWAN", "Session restored");
-            }
-            else if (state == RADIOLIB_LORAWAN_NEW_SESSION)
-            {
-                DEBUG("LORAWAN", "New session activated");
-            }
-            else
-            {
-                DEBUG("LORAWAN", "Failed to join network with error %d", state);
-                vTaskDelay(pdMS_TO_TICKS(5000)); // Wait 5s before retrying
-                continue;
-            }
-            persist.saveSession(node); // Save session after successful join
-        }
+//     // Serialize to JSON
+//     char jsonBuffer[256];
+//     size_t jsonLength = serializeJson(doc, jsonBuffer);
+//     DEBUG("LORAWAN", "JSON data: %s", jsonBuffer);
 
-        // Create JSON document
-        StaticJsonDocument<512> doc;
-        JsonArray spots = doc["spots"].to<JsonArray>();
+//     // Pad data for AES encryption (16-byte blocks)
+//     uint8_t paddedData[256];
+//     size_t paddedLength = (jsonLength + 15) & ~15;
+//     memcpy(paddedData, jsonBuffer, jsonLength);
+    
+//     // Add PKCS7 padding
+//     uint8_t paddingValue = paddedLength - jsonLength;
+//     for (size_t i = jsonLength; i < paddedLength; i++) {
+//         paddedData[i] = paddingValue;
+//     }
 
-        // Collect up to MAX_SPOTS_PER_TX to keep payload size manageable
-        const int MAX_SPOTS_PER_TX = 3; // Adjust based on LoRaWAN payload limits (e.g., 51 bytes for DR0)
-        int spotCount = 0;
+//     // Generate IV
+//     uint8_t iv[16];
+//     generate_iv(iv);
 
-        // Collect data from queue
-        while (spotCount < MAX_SPOTS_PER_TX && xQueueReceive(loraDataQueue, &data, pdMS_TO_TICKS(100)))
-        {
-            DEBUG("LORAWAN", "Received spot %d data: occupied=%d, us=%.1f, tof=%.1f",
-                  data.spotId, data.occupied, data.usDistance, data.tofDistance);
-            JsonObject spot = spots.add<JsonObject>();
-            spot["id"] = data.spotId;
-            spot["occupied"] = data.occupied;
-            spot["us_distance"] = data.usDistance;
-            spot["tof_distance"] = data.tofDistance;
-            spotCount++;
-        }
+//     // Encrypt data
+//     uint8_t encryptedData[256];
+//     aes->encryptCBC(paddedData, encryptedData, paddedLength, iv);
 
-        // Proceed if data was collected
-        if (spotCount > 0)
-        {
-            // Add UTC timestamp
-            time_t now = time(nullptr);
-            char timeStr[25];
-            strftime(timeStr, sizeof(timeStr), "%Y-%m-%dT%H:%M:%SZ", gmtime(&now));
-            doc["timestamp"] = timeStr;
+//     // Prepare final payload: IV + encrypted data
+//     // Make sure it doesn't exceed maximum payload size
+//     size_t maxPayloadSize = 51; // Maximum for DR0 in EU868
+//     size_t totalLength = 16 + paddedLength; // IV + encrypted data
+    
+//     if (totalLength > maxPayloadSize) {
+//         DEBUG("LORAWAN", "Payload too large (%d bytes), truncating", totalLength);
+//         totalLength = maxPayloadSize;
+//         paddedLength = maxPayloadSize - 16;
+//     }
 
-            // Serialize JSON to string
-            char jsonBuffer[512];
-            size_t jsonLength = serializeJson(doc, jsonBuffer);
-            DEBUG("LORAWAN", "Serialized JSON length: %d bytes", jsonLength);
+//     // Copy IV and encrypted data to appData
+//     appDataSize = totalLength;
+//     memcpy(appData, iv, 16);
+//     memcpy(appData + 16, encryptedData, paddedLength);
 
-            // Check payload size (LoRaWAN limit: ~51-222 bytes depending on data rate)
-            if (jsonLength > 200) // Conservative limit to account for encryption and IV
-            {
-                DEBUG("LORAWAN", "JSON payload too large (%d bytes). Reducing spots or splitting.", jsonLength);
-                vTaskDelay(pdMS_TO_TICKS(1000)); // Wait before retrying
-                continue;
-            }
+//     DEBUG("LORAWAN", "Prepared frame: %d bytes (IV: 16, Data: %d)", appDataSize, paddedLength);
+// }
 
-            // Pad JSON to multiple of 16 bytes for AES
-            uint8_t paddedInput[512];
-            size_t paddedLength = (jsonLength + 15) & ~15; // Round up to next 16-byte block
-            memcpy(paddedInput, jsonBuffer, jsonLength);
-            for (size_t i = jsonLength; i < paddedLength; i++)
-            {
-                paddedInput[i] = 16 - (jsonLength % 16); // PKCS7 padding
-            }
+// void loraTask(void* pvParameters) {
+//     auto* params = static_cast<LoRaTaskParams*>(pvParameters);
+//     QueueHandle_t loraDataQueue = params->loraDataQueue;
+    
+//     // Initialize AES
+//     AES256 aes(aes_key);
+    
+//     DEBUG("LORAWAN", "Starting LoRa task on core %d", xPortGetCoreID());
 
-            // Generate unique IV
-            uint8_t iv[16];
-            generate_iv(iv); 
+//     // Initialize Heltec board
 
-            // Encrypt the padded JSON
-            uint8_t encryptedOutput[512];
-            aes.encryptCBC(paddedInput, encryptedOutput, paddedLength, iv);
+//     // Initialize LoRaWAN
+// // #if (LORAWAN_DEVEUI_AUTO)
+// //     LoRaWAN.generateDeveuiByChipID();
+// // #endif
+//     LoRaWAN.init(loraWanClass, loraWanRegion);
+//     LoRaWAN.setDefaultDR(3);
+//     deviceState = DEVICE_STATE_JOIN;
 
-            // Prepend IV to encrypted data
-            uint8_t finalOutput[512 + 16];
-            memcpy(finalOutput, iv, 16);
-            memcpy(finalOutput + 16, encryptedOutput, paddedLength);
+//     SpotOccupancyData data;
+//     uint32_t txDutyCycleTime = 0;
+//     TickType_t lastWakeTime = xTaskGetTickCount();
 
-            // Send via LoRaWAN
-            uint8_t downlinkData[256];
-            size_t lenDown = sizeof(downlinkData);
-            size_t totalLength = paddedLength + 16;
-            if (totalLength > 222) // Max payload for higher data rates in EU868
-            {
-                DEBUG("LORAWAN", "Encrypted payload too large (%d bytes). Reducing spots or splitting.", totalLength);
-                vTaskDelay(pdMS_TO_TICKS(1000)); // Wait before retrying
-                continue;
-            }
+//     while (true) {
+//         switch (deviceState) {
+//             case DEVICE_STATE_INIT:
+//                 DEBUG("LORAWAN", "Initializing...");
+//                 deviceState = DEVICE_STATE_JOIN;
+//                 break;
 
-            int16_t state = node->sendReceive(finalOutput, totalLength, LORAWAN_PORT, downlinkData, &lenDown);
-            if (state == RADIOLIB_ERR_NONE)
-            {
-                DEBUG("LORAWAN", "Published IV + encrypted data (%d bytes), no downlink received", totalLength);
-            }
-            else if (state > 0)
-            {
-                DEBUG("LORAWAN", "Published IV + encrypted data (%d bytes), downlink received", totalLength);
-            }
-            else
-            {
-                DEBUG("LORAWAN", "Send failed with error %d", state);
-                xQueueReset(loraDataQueue); 
-            }
-        }
+//             case DEVICE_STATE_JOIN:
+//                 DEBUG("LORAWAN", "Joining network...");
+//                 LoRaWAN.join();
+//                 break;
 
-        vTaskDelay(pdMS_TO_TICKS(1000)); 
-    }
-}
+//             case DEVICE_STATE_SEND:
+//                 if (xQueueReceive(loraDataQueue, &data, 0) == pdTRUE) {
+//                     DEBUG("LORAWAN", "Sending data for spot %d", data.spotId);
+//                     prepareTxFrame(appPort, &data, &aes);
+//                     LoRaWAN.send();
+//                 }
+//                 deviceState = DEVICE_STATE_CYCLE;
+//                 break;
+
+//             case DEVICE_STATE_CYCLE:
+//                 txDutyCycleTime = appTxDutyCycle + randr(-APP_TX_DUTYCYCLE_RND, APP_TX_DUTYCYCLE_RND);
+//                 DEBUG("LORAWAN", "Cycle: waiting %lu ms", txDutyCycleTime);
+//                 LoRaWAN.cycle(txDutyCycleTime);
+//                 deviceState = DEVICE_STATE_SLEEP;
+//                 break;
+
+//             case DEVICE_STATE_SLEEP:
+//                 DEBUG("LORAWAN", "Entering sleep mode");
+//                 LoRaWAN.sleep(loraWanClass);
+//                 break;
+
+//             default:
+//                 deviceState = DEVICE_STATE_INIT;
+//                 break;
+//         }
+
+//         // Allow other tasks to run and respect duty cycle
+//         vTaskDelayUntil(&lastWakeTime, pdMS_TO_TICKS(100));
+//     }
+// }

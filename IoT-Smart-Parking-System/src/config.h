@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 
+#define NUM_SPOTS 2                   // Number of parking spots
+
+
 /* System Configuration File */
 
 // ------ System Information ------------------------------
@@ -18,12 +21,15 @@
 // --------------------------------------------------------
 
 // ------ MQTT Configuration ------------------------------
-// #define MQTT_SERVER "broker.hivemq.com"
-#define MQTT_SERVER "test.mosquitto.org"
+#define MQTT_SERVER "broker.hivemq.com"
+// #define MQTT_SERVER "test.mosquitto.org"
 #define MQTT_PORT 1883
 #define MQTT_TOPIC "SmartParkingSystem"
 #define MQTT_CLIENT_ID "ESP32_Parking_Sensor"
 // --------------------------------------------------------
+
+extern RTC_DATA_ATTR uint32_t lastSampleTime[NUM_SPOTS];
+
 
 // ------ I2C Configuration -------------------------------
 #define I2C_SDA 41
@@ -31,7 +37,7 @@
 // ---------------------------------------------------------
 
 // ------ DEEP/LIGHT Sleep Configuration -------------------
-#define DEEP_SLEEP_START_HOUR 0
+#define DEEP_SLEEP_START_HOUR 12
 #define DEEP_SLEEP_END_HOUR 1
 #define DEEP_SLEEP_END_MINUTE 19
 #define NTP_OFFSET 7200 // in seconds
@@ -46,24 +52,26 @@ uint8_t aes_key[32] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-    0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F
-};
+    0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x1F};
 // ---------------------------------------------------------
 
 // ------ General Distance Sensor Configuration -------------
 #define HYSTERESIS 5
-#define NUM_SPOTS 2
+// #define NUM_SPOTS 2
 
-#define NUM_SPOTS 2 // Number of parking spots
-#define OCCUPANCY_THRESHOLD 50.0 // [cm, distance below which spot is considered occupied
+#define OCCUPANCY_THRESHOLD 100.0      // [cm, distance below which spot is considered occupied
 #define SAMPLING_RATE_UNOCCUPIED 5000 // ms, sampling interval when unoccupied
-#define SAMPLING_RATE_OCCUPIED 30000 // ms, sampling interval when occupied
-#define ULTRASONIC_WEIGHT 0.4 // Weight for ultrasonic sensor in fusion
-#define TOF_WEIGHT 0.6 // Weight for ToF sensor in fusion
-#define MAX_DISTANCE 400.0 // cm, maximum valid sensor distance
-#define CONSISTENCY_THRESHOLD 0.2 // 20% max difference between sensor readings
-#define DATA_FRESHNESS_TIMEOUT 5000 // ms, max age of sensor data
-#define SINGLE_SENSOR_THRESHOLD 60.0 
+#define SAMPLING_RATE_OCCUPIED 30000  // ms, sampling interval when occupied
+#define ULTRASONIC_WEIGHT 0.4         // Weight for ultrasonic sensor in fusion
+#define TOF_WEIGHT 0.6                // Weight for ToF sensor in fusion
+#define MAX_DISTANCE 400.0            // cm, maximum valid sensor distance
+#define CONSISTENCY_THRESHOLD 0.2     // 20% max difference between sensor readings
+#define DATA_FRESHNESS_TIMEOUT 5000   // ms, max age of sensor data
+#define SINGLE_SENSOR_THRESHOLD 60.0
+#define VACANT_SAMPLE_INTERVAL 15000
+#define OCCUPIED_SAMPLE_INTERVAL 30000
+// #define VACANT_SAMPLE_INTERVAL 120000   // 2 minutes for vacant spots
+// #define OCCUPIED_SAMPLE_INTERVAL 300000 // 5 minutes for occupied spots
 // ----------------------------------------------------------
 
 // ------ VL53L0X Time-Of-Flight Sensor Configuration -------
@@ -72,8 +80,8 @@ uint8_t aes_key[32] = {
 #define LASER_THRESHOLD_DISTANCE 50
 #define MIN_LASER_DISTANCE 2
 #define MAX_LASER_DISTANCE 100000000
-const uint8_t loxAddresses[NUM_VL53L0X_SENSORS] = { 0x30, 0x31 };
-const uint8_t loxShutdownPins[NUM_VL53L0X_SENSORS] = { 48, 47 };
+const uint8_t loxAddresses[NUM_VL53L0X_SENSORS] = {0x30, 0x31};
+const uint8_t loxShutdownPins[NUM_VL53L0X_SENSORS] = {48, 47};
 // ----------------------------------------------------------
 
 // ------ Ultrasonic Sensor Configuration -------------------
@@ -82,20 +90,25 @@ const uint8_t loxShutdownPins[NUM_VL53L0X_SENSORS] = { 48, 47 };
 #define ULTRASONIC_THRESHOLD_DISTANCE 50
 #define MIN_ULTRASONIC_DISTANCE 2
 #define MAX_ULTRASONIC_DISTANCE 400
-const int trigPins[NUM_ULTRASONIC_SENSORS] = { 19, 33 };
-const int echoPins[NUM_ULTRASONIC_SENSORS] = { 20, 34 };
+const int trigPins[NUM_ULTRASONIC_SENSORS] = {19, 33};
+const int echoPins[NUM_ULTRASONIC_SENSORS] = {20, 34};
 // ----------------------------------------------------------
 
-// LoRaWAN configurations
-#define RADIO_BOARD_WIFI_LORA32_V3 
-const char* LORAWAN_BAND = "EU868"; // Adjust for your region (e.g., US915, AS923)
-const uint8_t LORAWAN_SUBBAND = 0;  // Set to 0 if no sub-band
-const uint8_t LORAWAN_PORT = 1;
-const uint64_t LORAWAN_JOINEUI = 0x0000000000000000; 
-const uint64_t LORAWAN_DEVEUI = 0x123456789ABCDEF0;  
-const uint8_t LORAWAN_APPKEY[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                                    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}; 
-const uint8_t LORAWAN_NWKKEY[16] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-                                    0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10}; 
-#define MINIMUM_DELAY 900 // Minimum delay in seconds (per TTN Fair Use Policy)
-#define DUTY_CYCLE_MS 1250 // Duty cycle interval in ms
+// // LoRaWAN configurations
+// #define RADIO_BOARD_WIFI_LORA32_V3
+// #define LORAWAN_BAND "EU868"  // Adjust for your region (e.g., US915, AS923)
+// #define LORAWAN_SUBBAND 0     // Set to 0 if no sub-band
+// #define LORAWAN_PORT 2
+// #define LORAWAN_JOINEUI 0x0000000000000000
+// #define LORAWAN_DEVEUI 0x70B3D57ED8004320
+// #define LORAWAN_APPKEY { 0xC1, 0xB6, 0x11, 0x8A, 0x60, 0x07, 0xE7, 0x22, 0xDD, 0x5D, 0x9C, 0xAD, 0x92, 0x9F, 0x7D, 0x2D }
+// #define LORAWAN_NWKKEY { 0x15, 0xb1, 0xd0, 0xef, 0xa4, 0x63, 0xdf, 0xbe, 0x3d, 0x11, 0x18, 0x1e, 0x1e, 0xc7, 0xda, 0x85 }
+// #define LORAWAN_APPSKEY { 0xd7, 0x2c, 0x78, 0x75, 0x8c, 0xdc, 0xca, 0xbf, 0x55, 0xee, 0x4a, 0x77, 0x8d, 0x16, 0xef, 0x67 }
+// #define LORAWAN_DEVADDR 0x007e6ae1
+// #define LORAWAN_ADR true
+// #define LORAWAN_CONFIRMED_MSG true
+// #define LORAWAN_CLASS CLASS_A
+// #define LORAWAN_DUTYCYCLE 15000  // 15 seconds, adjust based on your needs
+// #define LORAWAN_CHANNEL_MASK { 0x00FF, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000 }
+// #define MINIMUM_DELAY 900        // Minimum delay in seconds (per TTN Fair Use Policy)
+// #define DUTY_CYCLE_MS 15000     // Duty cycle interval in ms

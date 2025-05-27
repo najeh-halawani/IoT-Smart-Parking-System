@@ -1,7 +1,6 @@
 #pragma once
 #include <Arduino.h>
 #include <Preferences.h>
-#include <LoRaWAN_ESP32.h>
 #include "config.h"
 #include "debug.h"
 #include "wifi_comms.h"
@@ -67,7 +66,6 @@ struct SleepTaskParams
     Preferences *prefs;
     DistanceSensor **sensors;
     int sensorCount;
-    LoRaWANNode *loraNode;
 };
 
 void deepSleepTask(void *pvParameters)
@@ -76,7 +74,6 @@ void deepSleepTask(void *pvParameters)
     Preferences &prefs = *params->prefs;
     DistanceSensor **sensors = params->sensors;
     int sensorCount = params->sensorCount;
-    LoRaWANNode *node = params->loraNode;
 
     DEBUG("SLEEP", "Sleep task started on core %d", xPortGetCoreID());
 
@@ -114,7 +111,6 @@ void deepSleepTask(void *pvParameters)
                 {
                     sensors[i]->saveState(prefs);
                 }
-                persist.saveSession(node);
 
                 WiFi.disconnect(true);
                 delay(100);

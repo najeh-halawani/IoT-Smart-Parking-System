@@ -6,35 +6,33 @@
 #include "debug.h"
 #include "spot_occupancy_data.h"
 
-// RTC memory for persisting sampling state
-RTC_DATA_ATTR uint32_t lastSampleTime[NUM_SPOTS] = {0};
-
 struct ProcessingTaskParams {
     QueueHandle_t usQueue;
     QueueHandle_t tofQueue;
     QueueHandle_t mqttDataQueue;
     QueueHandle_t loraDataQueue;
     TaskHandle_t systemTaskHandle;
-    Preferences* prefs; // Added for sensor state
+    Preferences* prefs;
+    bool firstBoot;
 };
 
 void processingTask(void *pv) {
-    auto *params = static_cast<ProcessingTaskParams *>(pv);
-    QueueHandle_t ultrasonicReadingQueue = params->usQueue;
-    QueueHandle_t laserReadingQueue = params->tofQueue;
+    auto *params = static_cast<ProcessingTaskParams*>(pv);
+    QueueHandle_t usQueue = params->usQueue;
+    QueueHandle_t tofQueue = params->tofQueue;
     QueueHandle_t mqttDataQueue = params->mqttDataQueue;
-    QueueHandle_t loraDataQueue = params->loraDataQueue;
     TaskHandle_t systemTaskHandle = params->systemTaskHandle;
     Preferences& prefs = *params->prefs;
+    bool firstBoot = params->firstBoot;
+
     DistanceSensorReading usBuffer[NUM_SPOTS] = {};
     DistanceSensorReading tofBuffer[NUM_SPOTS] = {};
     bool usReady[NUM_SPOTS] = {false};
     bool tofReady[NUM_SPOTS] = {false};
-    static bool lastOccupied[NUM_SPOTS] = {false}; // Not in RTC, loaded from Preferences
-    const uint32_t VACANT_SAMPLE_INTERVAL = 120000;   // 2 minutes
-    const uint32_t OCCUPIED_SAMPLE_INTERVAL = 300000; // 5 minutes
+    bool lastOccupied[NUM_SPOTS] = {false};
+    bool sentFirstRun[NUM_SPOTS] = {false};
 
-    // Load lastOccupied from Preferences
+    // Load last occupancy states from NVS
     prefs.begin("parking-sys", true);
     for (int i = 0; i < NUM_SPOTS; i++) {
         String key = String("spot") + i + "_occupied";
@@ -42,57 +40,86 @@ void processingTask(void *pv) {
     }
     prefs.end();
 
-    DistanceSensorReading incoming;
-
     while (true) {
         uint32_t currentTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
-        // Receive sensor data
-        if (xQueueReceive(ultrasonicReadingQueue, &incoming, pdMS_TO_TICKS(100))) {
-            int id = incoming.sensorId;
-            usBuffer[id] = incoming;
-            usReady[id] = true;
-        }
-
-        if (xQueueReceive(laserReadingQueue, &incoming, pdMS_TO_TICKS(100))) {
-            int id = incoming.sensorId;
-            tofBuffer[id] = incoming;
-            tofReady[id] = true;
-        }
-
-        // Process each spot independently
-        bool firstBoot = prefs.getBool("firstboot", true);
+        // Process sensor readings for spots that need sampling
+        DistanceSensorReading incoming;
         for (int i = 0; i < NUM_SPOTS; i++) {
-            if (usReady[i] && tofReady[i]) {
-                uint32_t sampleInterval = lastOccupied[i] ? OCCUPIED_SAMPLE_INTERVAL : VACANT_SAMPLE_INTERVAL;
-                if (firstBoot || (currentTime - lastSampleTime[i] >= sampleInterval)) {
-                    float usDist = usBuffer[i].distance;
+            // Check if sampling is due
+            uint32_t sampleInterval = lastOccupied[i] ? OCCUPIED_SAMPLE_INTERVAL : VACANT_SAMPLE_INTERVAL;
+            if (currentTime < lastSampleTime[i] + sampleInterval) {
+                continue;
+            }
+
+            // Reset readiness flags
+            usReady[i] = false;
+            tofReady[i] = false;
+
+            // Collect ultrasonic readings
+            while (!usReady[i] && xQueueReceive(usQueue, &incoming, pdMS_TO_TICKS(100))) {
+                if (incoming.sensorId == i) {
+                    usBuffer[i] = incoming;
+                    usReady[i] = true;
+                }
+            }
+
+            // Process ultrasonic reading
+            if (usReady[i]) {
+                float usDist = usBuffer[i].distance;
+                bool usOccupied = (usDist > 0 && usDist < ULTRASONIC_THRESHOLD_DISTANCE);
+
+                // Only sample laser if ultrasonic indicates occupancy
+                if (usOccupied) {
+                    // Collect laser readings
+                    while (!tofReady[i] && xQueueReceive(tofQueue, &incoming, pdMS_TO_TICKS(100))) {
+                        if (incoming.sensorId == i) {
+                            tofBuffer[i] = incoming;
+                            tofReady[i] = true;
+                        }
+                    }
+                } else {
+                    tofBuffer[i].distance = -1;
+                    tofReady[i] = true;
+                }
+
+                // Process if both readings are available (or laser skipped)
+                if (usReady[i] && tofReady[i]) {
                     float tofDist = tofBuffer[i].distance;
-                    bool occupied = ((usDist > 0 && usDist < ULTRASONIC_THRESHOLD_DISTANCE) ||
-                                     (tofDist > 0 && tofDist < LASER_THRESHOLD_DISTANCE));
+                    bool tofOccupied = (tofDist > 0 && tofDist < LASER_THRESHOLD_DISTANCE);
 
-                    DEBUG("PROCESS", "Spot %d → US: %.1f | TOF: %.1f → %s",
-                          i, usDist, tofDist, occupied ? "OCCUPIED" : "VACANT");
+                    // Spot is occupied only if both sensors detect occupancy
+                    bool occupied = usOccupied && (usOccupied ? tofOccupied : false);
 
-                    // Send data on first boot or state change
-                    if (firstBoot || occupied != lastOccupied[i]) {
+                    // Debug print after processing each spot
+                    DEBUG("PROCESS", "Spot %d State → Occupied: %s | US: %.1f cm (Occupied: %s) | TOF: %.1f cm (Occupied: %s)",
+                          i, occupied ? "Yes" : "No", usDist, usOccupied ? "Yes" : "No",
+                          tofDist, tofOccupied ? "Yes" : "N/A");
+
+                    // Update last sample time
+                    lastSampleTime[i] = currentTime;
+
+                    // Send data to MQTT if state changed or first run
+                    if (occupied != lastOccupied[i] || (firstBoot && !sentFirstRun[i])) {
                         SpotOccupancyData data = {
                             .spotId = i,
                             .occupied = occupied,
                             .usDistance = usDist,
                             .tofDistance = tofDist
                         };
+
+                        // Send to MQTT queue
                         if (xQueueSend(mqttDataQueue, &data, pdMS_TO_TICKS(100)) != pdPASS) {
                             DEBUG("PROCESS", "Failed to send spot %d data to MQTT queue", i);
                         } else {
-                            DEBUG("PROCESS", "Sent spot %d data to MQTT queue", i);
+                            DEBUG("PROCESS", "Sent spot %d data to MQTT queue (FirstRun: %s, StateChanged: %s)",
+                                  i, firstBoot ? "Yes" : "No", occupied != lastOccupied[i] ? "Yes" : "No");
+                            if (firstBoot) {
+                                sentFirstRun[i] = true;
+                            }
                         }
-                        // Uncomment for LoRa if needed
-                        // if (xQueueSend(loraDataQueue, &data, pdMS_TO_TICKS(100)) != pdPASS) {
-                        //     DEBUG("PROCESS", "Failed to send spot %d data to LoRa queue", i);
-                        // }
 
-                        // Save new state
+                        // Save new state to NVS
                         prefs.begin("parking-sys", false);
                         String key = String("spot") + i + "_occupied";
                         prefs.putBool(key.c_str(), occupied);
@@ -100,16 +127,31 @@ void processingTask(void *pv) {
                         lastOccupied[i] = occupied;
                     }
 
-                    lastSampleTime[i] = currentTime;
-                    usReady[i] = false;
-                    tofReady[i] = false;
-
-                    // Notify system task immediately
+                    // Notify system task that processing is complete for this spot
                     xTaskNotifyGive(systemTaskHandle);
                 }
             }
         }
 
+        // Clear firstBoot in NVS if all spots have sent data on first run
+        if (firstBoot) {
+            bool allSent = true;
+            for (int i = 0; i < NUM_SPOTS; i++) {
+                if (!sentFirstRun[i]) {
+                    allSent = false;
+                    break;
+                }
+            }
+            if (allSent) {
+                prefs.begin("parking-sys", false);
+                prefs.putBool("firstBoot", false);
+                prefs.end();
+                firstBoot = false;
+                DEBUG("PROCESS", "First boot complete, cleared firstBoot flag in NVS");
+            }
+        }
+
+        // Small delay to prevent tight loop
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
