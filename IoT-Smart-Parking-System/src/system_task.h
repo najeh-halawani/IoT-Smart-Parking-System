@@ -71,24 +71,23 @@ void systemTask(void *pv) {
 
         // Determine which spots need sampling
         bool shouldSample[NUM_SPOTS] = {false};
-        uint32_t minSleepTime = UINT32_MAX;
+        int spotsToSample = 0;
         for (int i = 0; i < NUM_SPOTS; i++) {
             uint32_t sampleInterval = lastOccupied[i] ? OCCUPIED_SAMPLE_INTERVAL : VACANT_SAMPLE_INTERVAL;
             uint32_t timeSinceLastSample = currentTime - lastSampleTime[i];
             if (firstBoot || timeSinceLastSample >= sampleInterval) {
                 shouldSample[i] = true;
+                spotsToSample++;
             }
-            uint32_t timeUntilNextSample = (timeSinceLastSample >= sampleInterval) ? 0 : (sampleInterval - timeSinceLastSample);
-            minSleepTime = min(minSleepTime, timeUntilNextSample);
         }
 
         // Process sampling if any spot is due
-        if (shouldSample[0] || shouldSample[1]) {
+        if (spotsToSample > 0) {
             // Trigger ultrasonic sampling
             DEBUG("SYSTEM", "Triggering ultrasonic sampling for spots: %d, %d", shouldSample[0], shouldSample[1]);
             xTaskNotifyGive(usHandle);
-            // Wait for ultrasonic task to complete (timeout after 500ms)
-            if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(3000)) == 0) {
+            // Wait for ultrasonic task to complete (timeout after 1000ms)
+            if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000)) == 0) {
                 DEBUG("SYSTEM", "Ultrasonic sampling timeout");
             } else {
                 DEBUG("SYSTEM", "Ultrasonic sampling completed");
@@ -96,51 +95,36 @@ void systemTask(void *pv) {
 
             // Check which spots need laser sampling
             bool shouldSampleLaser[NUM_SPOTS] = {false};
+            int laserSpots = 0;
             DistanceSensorReading usReading;
             while (xQueueReceive(usOccupancyQueue, &usReading, pdMS_TO_TICKS(100))) {
                 int spotId = usReading.sensorId;
                 if (usReading.distance > 0 && usReading.distance < ULTRASONIC_THRESHOLD_DISTANCE) {
                     shouldSampleLaser[spotId] = true;
+                    laserSpots++;
                 }
             }
 
             // Trigger laser sampling if needed
-            if (shouldSampleLaser[0] || shouldSampleLaser[1]) {
+            if (laserSpots > 0) {
                 DEBUG("SYSTEM", "Triggering laser sampling for spots: %d, %d", shouldSampleLaser[0], shouldSampleLaser[1]);
                 xTaskNotifyGive(laserSensingHandle);
-                // Wait for laser to complete (timeout after 500ms)
-                if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(3000)) == 0) {
+                // Wait for laser to complete (timeout after 1000ms)
+                if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000)) == 0) {
                     DEBUG("SYSTEM", "Laser sampling timeout");
                 } else {
                     DEBUG("SYSTEM", "Laser sampling completed");
                 }
             }
 
-            // Wait for processing task to complete (timeout after 2s)
-            if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(5000)) == 0) {
-                DEBUG("SYSTEM", "Processing task timeout");
-            } else {
-                DEBUG("SYSTEM", "Processing completed for all sampled spots");
+            // Wait for processing task to complete for all sampled spots
+            for (int i = 0; i < spotsToSample; i++) {
+                if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10000)) == 0) {
+                    DEBUG("SYSTEM", "Processing task timeout for spot %d", i);
+                } else {
+                    DEBUG("SYSTEM", "Processing completed for spot %d", i);
+                }
             }
-
-            // Recalculate minSleepTime after sampling
-            minSleepTime = UINT32_MAX;
-            for (int i = 0; i < NUM_SPOTS; i++) {
-                uint32_t sampleInterval = lastOccupied[i] ? OCCUPIED_SAMPLE_INTERVAL : VACANT_SAMPLE_INTERVAL;
-                uint32_t timeSinceLastSample = currentTime - lastSampleTime[i];
-                uint32_t timeUntilNextSample = (timeSinceLastSample >= sampleInterval) ? 0 : (sampleInterval - timeSinceLastSample);
-                minSleepTime = min(minSleepTime, timeUntilNextSample);
-            }
-        }
-
-        // Enter deep sleep if no immediate sampling is needed
-        if (minSleepTime > 1000) {
-            DEBUG("SYSTEM", "All sampling completed, entering deep sleep for %lu ms", minSleepTime);
-            WiFi.disconnect(true);
-            delay(100);
-            Serial.flush();
-            esp_sleep_enable_timer_wakeup(minSleepTime * 1000000ULL); // Convert ms to us
-            esp_deep_sleep_start();
         }
 
         vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(2000));

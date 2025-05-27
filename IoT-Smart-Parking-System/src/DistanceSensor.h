@@ -58,7 +58,7 @@ public:
 
     if (validReadings == 0) {
       DEBUG(debugTag().c_str(), "No valid readings");
-      return -1;
+      return 0;
     }
 
     // Sort readings to compute median

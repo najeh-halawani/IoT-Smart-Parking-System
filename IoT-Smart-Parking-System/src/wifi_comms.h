@@ -41,6 +41,7 @@ void connectWiFi(unsigned long lastSuccessfulConnection, unsigned long connectio
 {
   DEBUG("WIFI", "Connecting to WiFi SSID: %s", WIFI_SSID);
 
+  WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   int attempts = 0;

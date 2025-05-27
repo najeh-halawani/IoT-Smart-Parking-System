@@ -31,8 +31,8 @@ void processingTask(void *pv) {
     bool tofReady[NUM_SPOTS] = {false};
     bool lastOccupied[NUM_SPOTS] = {false};
     bool sentFirstRun[NUM_SPOTS] = {false};
+    bool processedThisCycle[NUM_SPOTS] = {false};
 
-    // Load last occupancy states from NVS
     prefs.begin("parking-sys", true);
     for (int i = 0; i < NUM_SPOTS; i++) {
         String key = String("spot") + i + "_occupied";
@@ -43,64 +43,68 @@ void processingTask(void *pv) {
     while (true) {
         uint32_t currentTime = xTaskGetTickCount() * portTICK_PERIOD_MS;
 
-        // Process sensor readings for spots that need sampling
-        DistanceSensorReading incoming;
+        // Reset processed flags
         for (int i = 0; i < NUM_SPOTS; i++) {
-            // Check if sampling is due
+            processedThisCycle[i] = false;
+        }
+
+        // Process sensor readings
+        DistanceSensorReading incoming;
+        int spotsToProcess = 0;
+        for (int i = 0; i < NUM_SPOTS; i++) {
+            uint32_t sampleInterval = lastOccupied[i] ? OCCUPIED_SAMPLE_INTERVAL : VACANT_SAMPLE_INTERVAL;
+            if (currentTime >= lastSampleTime[i] + sampleInterval) {
+                spotsToProcess++;
+            }
+        }
+
+        for (int i = 0; i < NUM_SPOTS; i++) {
             uint32_t sampleInterval = lastOccupied[i] ? OCCUPIED_SAMPLE_INTERVAL : VACANT_SAMPLE_INTERVAL;
             if (currentTime < lastSampleTime[i] + sampleInterval) {
                 continue;
             }
 
-            // Reset readiness flags
             usReady[i] = false;
             tofReady[i] = false;
 
             // Collect ultrasonic readings
-            while (!usReady[i] && xQueueReceive(usQueue, &incoming, pdMS_TO_TICKS(100))) {
+            while (xQueueReceive(usQueue, &incoming, pdMS_TO_TICKS(100))) {
                 if (incoming.sensorId == i) {
                     usBuffer[i] = incoming;
                     usReady[i] = true;
+                    break;
                 }
             }
 
-            // Process ultrasonic reading
             if (usReady[i]) {
                 float usDist = usBuffer[i].distance;
                 bool usOccupied = (usDist > 0 && usDist < ULTRASONIC_THRESHOLD_DISTANCE);
 
-                // Only sample laser if ultrasonic indicates occupancy
                 if (usOccupied) {
-                    // Collect laser readings
-                    while (!tofReady[i] && xQueueReceive(tofQueue, &incoming, pdMS_TO_TICKS(100))) {
+                    while (xQueueReceive(tofQueue, &incoming, pdMS_TO_TICKS(100))) {
                         if (incoming.sensorId == i) {
                             tofBuffer[i] = incoming;
                             tofReady[i] = true;
+                            break;
                         }
                     }
                 } else {
-                    tofBuffer[i].distance = -1;
+                    tofBuffer[i].distance = 0;
                     tofReady[i] = true;
                 }
 
-                // Process if both readings are available (or laser skipped)
                 if (usReady[i] && tofReady[i]) {
                     float tofDist = tofBuffer[i].distance;
                     bool tofOccupied = (tofDist > 0 && tofDist < LASER_THRESHOLD_DISTANCE);
-
-                    // Spot is occupied only if both sensors detect occupancy
                     bool occupied = usOccupied && (usOccupied ? tofOccupied : false);
 
-                    // Debug print after processing each spot
                     DEBUG("PROCESS", "Spot %d State → Occupied: %s | US: %.1f cm (Occupied: %s) | TOF: %.1f cm (Occupied: %s)",
                           i, occupied ? "Yes" : "No", usDist, usOccupied ? "Yes" : "No",
                           tofDist, tofOccupied ? "Yes" : "N/A");
 
-                    // Update last sample time
                     lastSampleTime[i] = currentTime;
 
-                    // Send data to MQTT if state changed or first run
-                    if (occupied != lastOccupied[i] || (firstBoot && !sentFirstRun[i])) {
+                    if (firstBoot || occupied != lastOccupied[i]) {
                         SpotOccupancyData data = {
                             .spotId = i,
                             .occupied = occupied,
@@ -108,7 +112,6 @@ void processingTask(void *pv) {
                             .tofDistance = tofDist
                         };
 
-                        // Send to MQTT queue
                         if (xQueueSend(mqttDataQueue, &data, pdMS_TO_TICKS(100)) != pdPASS) {
                             DEBUG("PROCESS", "Failed to send spot %d data to MQTT queue", i);
                         } else {
@@ -119,7 +122,6 @@ void processingTask(void *pv) {
                             }
                         }
 
-                        // Save new state to NVS
                         prefs.begin("parking-sys", false);
                         String key = String("spot") + i + "_occupied";
                         prefs.putBool(key.c_str(), occupied);
@@ -127,31 +129,60 @@ void processingTask(void *pv) {
                         lastOccupied[i] = occupied;
                     }
 
-                    // Notify system task that processing is complete for this spot
+                    processedThisCycle[i] = true;
                     xTaskNotifyGive(systemTaskHandle);
                 }
             }
         }
 
-        // Clear firstBoot in NVS if all spots have sent data on first run
-        if (firstBoot) {
-            bool allSent = true;
-            for (int i = 0; i < NUM_SPOTS; i++) {
-                if (!sentFirstRun[i]) {
-                    allSent = false;
-                    break;
-                }
-            }
-            if (allSent) {
-                prefs.begin("parking-sys", false);
-                prefs.putBool("firstBoot", false);
-                prefs.end();
-                firstBoot = false;
-                DEBUG("PROCESS", "First boot complete, cleared firstBoot flag in NVS");
+        // Check if all due spots are processed
+        bool allProcessed = true;
+        for (int i = 0; i < NUM_SPOTS; i++) {
+            uint32_t sampleInterval = lastOccupied[i] ? OCCUPIED_SAMPLE_INTERVAL : VACANT_SAMPLE_INTERVAL;
+            if (currentTime >= lastSampleTime[i] + sampleInterval && !processedThisCycle[i]) {
+                allProcessed = false;
+                break;
             }
         }
 
-        // Small delay to prevent tight loop
+        if (allProcessed && spotsToProcess > 0) {
+            if (firstBoot) {
+                bool allSent = true;
+                for (int i = 0; i < NUM_SPOTS; i++) {
+                    if (!sentFirstRun[i]) {
+                        allSent = false;
+                        break;
+                    }
+                }
+                if (allSent) {
+                    prefs.begin("parking-sys", false);
+                    prefs.putBool("firstBoot", false);
+                    prefs.end();
+                    firstBoot = false;
+                    DEBUG("PROCESS", "First boot complete, cleared firstBoot flag in NVS");
+                }
+            }
+
+            // Calculate minSleepTime
+            uint32_t minSleepTime = UINT32_MAX;
+            for (int i = 0; i < NUM_SPOTS; i++) {
+                uint32_t sampleInterval = lastOccupied[i] ? OCCUPIED_SAMPLE_INTERVAL : VACANT_SAMPLE_INTERVAL;
+                uint32_t timeSinceLastSample = currentTime - lastSampleTime[i];
+                uint32_t timeUntilNextSample = (timeSinceLastSample >= sampleInterval) ? 0 : (sampleInterval - timeSinceLastSample);
+                minSleepTime = min(minSleepTime, timeUntilNextSample);
+            }
+
+            if (minSleepTime > 1000) {
+                DEBUG("PROCESS", "All sampling and MQTT sending completed, entering deep sleep for %lu ms", minSleepTime);
+                WiFi.disconnect(true);
+                digitalWrite(Vext, HIGH); // Disable external power
+                delay(100);
+                Serial.flush();
+                esp_sleep_enable_timer_wakeup(minSleepTime * 1000000ULL);
+                esp_deep_sleep_start();
+            }
+        }
+
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }

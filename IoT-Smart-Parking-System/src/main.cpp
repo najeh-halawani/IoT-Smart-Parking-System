@@ -70,6 +70,7 @@ void setup() {
     int sensorCount = buildUnifiedSensorArray(usSensors, tofSensors, allSensors);
 
     // Initialize WiFi
+    
     connectWiFi(lastSuccessfulConnection, connectionAttempts);
     WiFi.setSleep(true);
 
