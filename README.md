@@ -60,7 +60,7 @@ Prototype tested outside the DIAG building using a single node mounted on the cu
 
 | Code | Description |
 |------|-------------|
-| NFR-1 | ≥180 days autonomy with a 3.7 V 10,000 mAh LiPo battery |
+| NFR-1 | ≥120 days autonomy with a 3.7 V 10,000 mAh LiPo battery |
 | NFR-2 | BOM ≤ €20 per node  |
 | NFR-3 | Support ≥4 sensors per MCU |
 
@@ -76,10 +76,15 @@ Prototype tested outside the DIAG building using a single node mounted on the cu
 | LiPo 3.7V 10,000 mAh | Battery | €9.39 |
 | IP65 Enclosure | Weatherproof housing | €2.07 |
 
-![hwDiagram](Datasheets/HardwareDiagram.png.png)
+![hwDiagram](Datasheets/HardwareDiagram.png)
 ---
 
 ## ⚙️ Technical Implementation Details
+
+### System Overview
+![System overviwe](Datasheets/iot_pipeline.png)
+---
+
 
 ### Firmware Architecture
 
@@ -101,6 +106,8 @@ Prototype tested outside the DIAG building using a single node mounted on the cu
 - **Notifications:** Used for task synchronization (e.g., systemTask notifies sensor tasks to start sampling).
 
 ---
+![System overviwe](Datasheets/SensorFusionStrategy.png)
+---
 
 ### Sensor Fusion & Occupancy Logic
 
@@ -112,6 +119,8 @@ Prototype tested outside the DIAG building using a single node mounted on the cu
 - **Data Structure:** Each update includes spot ID, occupancy state, both sensor distances, and a timestamp.
 
 ---
+
+
 
 ### Secure Data Transmission
 
