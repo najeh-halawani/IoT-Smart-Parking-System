@@ -89,24 +89,12 @@ void systemTask(void *pv) {
             DEBUG("SYSTEM", "Starting sensor sampling sequence for %d spots", spotsToSample);
             
             // Clear any stale data from occupancy queue
-            DistanceSensorReading staleReading;
-            while (xQueueReceive(usOccupancyQueue, &staleReading, 0)) {
-                // Just clear the queue
-            }
+            // DistanceSensorReading staleReading;
+            // while (xQueueReceive(usOccupancyQueue, &staleReading, 0)) {
+            //     // Just clear the queue
+            // }
 
-            // Step 1: Trigger ultrasonic sampling
-            DEBUG("SYSTEM", "Step 1: Triggering ultrasonic sampling");
-            xTaskNotifyGive(usHandle);
-            
-            // Wait for ultrasonic task to complete with proper timeout
-            uint32_t notificationValue = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(3000));
-            if (notificationValue == 0) {
-                DEBUG("SYSTEM", "ERROR: Ultrasonic sampling timeout");
-                continue; // Skip this cycle
-            }
-            DEBUG("SYSTEM", "Ultrasonic sampling completed successfully");
-
-            // Step 2: Process ultrasonic results and determine laser needs
+            // Step: Process ultrasonic results and determine laser needs
             bool shouldSampleLaser[NUM_SPOTS] = {false};
             int laserSpots = 0;
             DistanceSensorReading usReading;
@@ -116,6 +104,18 @@ void systemTask(void *pv) {
             int receivedReadings = 0;
             TickType_t startTime = xTaskGetTickCount();
             
+            // Trigger ultrasonic sampling --------------------
+            DEBUG("SYSTEM", "Step 1: Triggering ultrasonic sampling");
+            xTaskNotifyGive(usHandle);
+            // Wait for ultrasonic task to complete with proper timeout
+            uint32_t notificationValue = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(3000));
+            if (notificationValue == 0) {
+                DEBUG("SYSTEM", "ERROR: Ultrasonic sampling timeout");
+                continue; // Skip this cycle
+            }
+            DEBUG("SYSTEM", "Ultrasonic sampling completed successfully");
+            // --------------------------------------------------
+
             while (receivedReadings < expectedReadings && 
                    (xTaskGetTickCount() - startTime) < pdMS_TO_TICKS(1000)) {
                 if (xQueueReceive(usOccupancyQueue, &usReading, pdMS_TO_TICKS(100))) {

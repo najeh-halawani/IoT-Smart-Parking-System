@@ -16,15 +16,15 @@
 // --------------------------------------------------------
 
 // ------ WiFi Configuration ------------------------------
-#define WIFI_SSID "Najeh's S25 Ultra"
-#define WIFI_PASSWORD "white1xx"
+#define WIFI_SSID "FRITZ!Box 7530 LP"
+#define WIFI_PASSWORD "70403295595551907386"
 // --------------------------------------------------------
 
 // ------ MQTT Configuration ------------------------------
-#define MQTT_SERVER "broker.hivemq.com"
+#define MQTT_SERVER "192.168.178.50"
 // #define MQTT_SERVER "test.mosquitto.org"
 #define MQTT_PORT 1883
-#define MQTT_TOPIC "SmartParkingSystem"
+#define MQTT_TOPIC "iot/aggregate"
 #define MQTT_CLIENT_ID "ESP32_Parking_Sensor"
 // --------------------------------------------------------
 
