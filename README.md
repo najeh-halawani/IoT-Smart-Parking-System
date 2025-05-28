@@ -76,7 +76,7 @@ Prototype tested outside the DIAG building using a single node mounted on the cu
 | LiPo 3.7V 10,000 mAh | Battery | €9.39 |
 | IP65 Enclosure | Weatherproof housing | €2.07 |
 
-
+![hwDiagram](Datasheets/HardwareDiagram.png.png)
 ---
 
 ## ⚙️ Technical Implementation Details
